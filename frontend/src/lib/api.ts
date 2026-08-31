@@ -5,8 +5,18 @@ export const API_BASE_URL: string =
   (import.meta.env.VITE_API_BASE_URL as string | undefined) ?? 'http://localhost:8000';
 
 /** Same origin as API_BASE_URL, but ws(s):// instead of http(s):// — used
- * to open the checkout WebSocket (see app/checkout/ws.py). */
-export const WS_BASE_URL: string = API_BASE_URL.replace(/^http/, 'ws');
+ * to open the checkout WebSocket (see app/checkout/ws.py).
+ *
+ * Deliberately keyed off the *page's own* protocol, not whatever scheme
+ * happens to be baked into VITE_API_BASE_URL: a page served over https
+ * MUST use wss (browsers silently block a plain ws:// connection from an
+ * https:// page as mixed content — it fails with no visible error, not
+ * even in the network tab in some browsers). If VITE_API_BASE_URL were
+ * ever misconfigured as "http://..." in production, deriving from its
+ * scheme instead would silently produce ws:// and break exactly this way
+ * — works locally over http, breaks once deployed over https. */
+const isSecurePage = typeof window !== 'undefined' && window.location.protocol === 'https:';
+export const WS_BASE_URL: string = API_BASE_URL.replace(/^https?/, isSecurePage ? 'wss' : 'ws');
 
 export class ApiError extends Error {
   status: number;
