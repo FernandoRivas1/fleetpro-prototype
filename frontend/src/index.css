@@ -1,0 +1,33 @@
+@import './styles/tokens.css';
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+}
+
+body {
+  margin: 0;
+  background: var(--fp-bg-page);
+  font-family: var(--fp-font-sans);
+  color: var(--fp-primary);
+}
+
+a {
+  color: var(--fp-accent);
+}
+
+button,
+input,
+select {
+  font-family: inherit;
+}
+
+code,
+.mono {
+  font-family: var(--fp-font-mono);
+}

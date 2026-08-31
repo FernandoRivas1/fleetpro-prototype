@@ -1,0 +1,26 @@
+# Secrets — never commit real credentials.
+keys.env
+backend/.env
+.env
+.env.local
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+venv/
+*.egg-info/
+
+# Scanned ID/license photos (app/checkout/documents.py) — local dev storage,
+# contains PII, never commit.
+backend/uploads/
+
+# Node (frontend, once scaffolded)
+node_modules/
+dist/
+.vercel/
+
+# Editors / OS
+.vscode/
+.idea/
+.DS_Store

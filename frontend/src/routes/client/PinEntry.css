@@ -1,0 +1,163 @@
+.pin-page {
+  height: 100vh;
+  width: 100vw;
+  background: var(--fp-bg-alt);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 40px;
+  position: relative;
+}
+
+.pin-page__brand {
+  position: absolute;
+  top: 30px;
+  left: 40px;
+  display: flex;
+  align-items: center;
+  gap: 11px;
+}
+
+.pin-page__mark {
+  width: 30px;
+  height: 30px;
+  border-radius: 8px;
+  background: var(--fp-primary);
+  color: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 700;
+  font-size: 14px;
+}
+
+.pin-page__brand-text {
+  font-size: 17px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  color: var(--fp-secondary);
+}
+
+.pin-page__badge {
+  position: absolute;
+  top: 34px;
+  right: 40px;
+  font-family: var(--fp-font-mono);
+  font-size: 13px;
+  letter-spacing: 0.1em;
+  color: var(--fp-text-muted);
+}
+
+.pin-page__card {
+  width: 640px;
+  max-width: 92vw;
+  background: #fff;
+  border-radius: 20px;
+  box-shadow: 0 8px 28px rgba(65, 83, 100, 0.1);
+  padding: 60px 64px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 42px;
+}
+
+.pin-page__card h1 {
+  font-size: 36px;
+  font-weight: 700;
+  letter-spacing: -0.025em;
+  margin: 0;
+}
+
+.pin-page__card p {
+  font-size: 20px;
+  color: var(--fp-secondary);
+  text-align: center;
+  margin: 12px 0 0;
+}
+
+.pin-cells {
+  display: flex;
+  gap: 18px;
+}
+
+.pin-cell {
+  width: 100px;
+  height: 128px;
+  border-radius: 14px;
+  background: var(--fp-bg-alt);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: var(--fp-font-mono);
+  font-size: 66px;
+  font-weight: 500;
+  color: var(--fp-primary);
+  border: 2px solid transparent;
+}
+
+.pin-cell--active {
+  border-color: var(--fp-accent);
+  box-shadow: 0 0 0 4px rgba(101, 56, 229, 0.12);
+}
+
+.pin-cell--error {
+  border-color: #e0a49b;
+}
+
+.pin-message {
+  min-height: 26px;
+  font-size: 18px;
+  font-weight: 600;
+}
+
+.pin-message--error {
+  color: var(--fp-danger);
+}
+
+.pin-message--ok {
+  color: var(--fp-success);
+}
+
+.pin-submit {
+  width: 100%;
+  height: 68px;
+  border-radius: 12px;
+  border: none;
+  color: #fff;
+  font-size: 20px;
+  font-weight: 600;
+  cursor: pointer;
+  background: var(--fp-accent);
+}
+
+.pin-submit:disabled {
+  background: var(--fp-border-strong);
+  cursor: not-allowed;
+}
+
+.pin-keypad {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 14px;
+  max-width: 640px;
+}
+
+.pin-key {
+  min-width: 64px;
+  height: 64px;
+  padding: 0 18px;
+  border-radius: 12px;
+  background: #fff;
+  border: 1px solid #e0e4e8;
+  font-family: var(--fp-font-mono);
+  font-size: 24px;
+  font-weight: 500;
+  color: var(--fp-primary);
+  cursor: pointer;
+}
+
+.pin-key:hover {
+  background: #eef0f3;
+}

@@ -1,0 +1,223 @@
+.debug-panel {
+  max-width: 640px;
+  margin: 48px auto;
+  padding: 32px;
+  background: var(--fp-bg);
+  border: 1px solid var(--fp-border);
+  border-radius: 14px;
+  box-shadow: 0 18px 50px rgba(65, 83, 100, 0.1);
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+
+.debug-panel__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.debug-panel__header h1 {
+  font-size: 22px;
+  margin: 0;
+  letter-spacing: -0.02em;
+}
+
+.debug-panel__status {
+  font-family: var(--fp-font-mono);
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  padding: 5px 10px;
+  border-radius: 999px;
+  border: 1px solid transparent;
+}
+
+.debug-panel__status--success {
+  color: var(--fp-success);
+  background: var(--fp-success-bg);
+  border-color: var(--fp-success-border);
+}
+
+.debug-panel__status--danger {
+  color: var(--fp-danger);
+  background: var(--fp-danger-bg);
+  border-color: var(--fp-danger-border);
+}
+
+.debug-panel__status--warning {
+  color: var(--fp-warning);
+  background: var(--fp-warning-bg);
+  border-color: var(--fp-warning-border);
+}
+
+.debug-panel__status--muted {
+  color: var(--fp-secondary);
+  background: var(--fp-bg-alt);
+  border-color: var(--fp-border);
+}
+
+.debug-panel__row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 14px;
+}
+
+.debug-panel__row code {
+  background: var(--fp-bg-alt);
+  border: 1px solid var(--fp-border);
+  border-radius: 6px;
+  padding: 2px 8px;
+  font-size: 13px;
+}
+
+.debug-panel__label {
+  font-family: var(--fp-font-mono);
+  font-size: 11px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--fp-text-muted);
+}
+
+.debug-panel__section {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  padding-top: 8px;
+  border-top: 1px solid var(--fp-border);
+}
+
+.debug-panel__actions {
+  display: flex;
+  gap: 10px;
+}
+
+.debug-panel button {
+  height: 40px;
+  padding: 0 16px;
+  border-radius: 8px;
+  border: none;
+  background: var(--fp-accent);
+  color: #fff;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.debug-panel button:hover {
+  background: var(--fp-accent-hover);
+}
+
+.debug-panel button:disabled {
+  background: var(--fp-border-input);
+  cursor: not-allowed;
+}
+
+.debug-panel__button--ghost,
+.debug-panel .debug-panel__button--ghost {
+  background: #fff;
+  color: var(--fp-secondary);
+  border: 1.5px solid var(--fp-border-input);
+}
+
+.debug-panel__button--ghost:hover {
+  border-color: var(--fp-secondary);
+  background: #fff;
+  color: var(--fp-primary);
+}
+
+.debug-panel__log {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  max-height: 240px;
+  overflow-y: auto;
+  background: var(--fp-bg-alt);
+  border: 1px solid var(--fp-border);
+  border-radius: 10px;
+  padding: 12px 14px;
+}
+
+.debug-panel__log-row {
+  display: grid;
+  grid-template-columns: 90px 200px 1fr;
+  gap: 10px;
+  font-size: 12px;
+}
+
+.debug-panel__muted {
+  color: var(--fp-text-muted);
+  font-size: 13px;
+  margin: 0;
+}
+
+.debug-panel__field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.debug-panel__field label {
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.debug-panel__field input,
+.debug-panel__field select {
+  height: 42px;
+  border-radius: 8px;
+  border: 1px solid var(--fp-border-strong);
+  padding: 0 12px;
+  font-size: 14px;
+  background: #fff;
+  color: var(--fp-primary);
+}
+
+.debug-panel__field input:focus,
+.debug-panel__field select:focus {
+  outline: none;
+  border-color: var(--fp-accent);
+}
+
+.debug-panel__hint {
+  font-size: 13px;
+  color: var(--fp-text-muted);
+}
+
+.debug-panel__error {
+  font-size: 13px;
+  color: var(--fp-danger);
+}
+
+.debug-panel__pin-cells {
+  display: flex;
+  gap: 10px;
+}
+
+.debug-panel__pin-cell {
+  width: 56px;
+  height: 64px;
+  border-radius: 10px;
+  background: var(--fp-bg-alt);
+  border: 2px solid var(--fp-border);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: var(--fp-font-mono);
+  font-size: 30px;
+  font-weight: 500;
+}
+
+.debug-panel__qr-box {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  padding: 20px;
+  border: 1px solid var(--fp-border);
+  border-radius: 12px;
+  background: var(--fp-bg-alt);
+}

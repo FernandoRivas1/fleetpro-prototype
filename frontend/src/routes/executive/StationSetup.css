@@ -1,0 +1,234 @@
+.station-setup {
+  height: 100vh;
+  width: 100vw;
+  background: var(--fp-bg-alt);
+  display: flex;
+  flex-direction: column;
+}
+
+.station-setup__header {
+  height: 68px;
+  flex: none;
+  background: var(--fp-bg);
+  border-bottom: 1px solid var(--fp-border);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 22px;
+}
+
+.station-setup__brand {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.station-setup__mark {
+  width: 34px;
+  height: 34px;
+  border-radius: 9px;
+  background: var(--fp-primary);
+  color: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 700;
+  font-size: 15px;
+}
+
+.station-setup__title {
+  font-size: 19px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+}
+
+.station-setup__form-wrap {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 40px;
+}
+
+.station-setup__card {
+  width: 520px;
+  max-width: 100%;
+  background: var(--fp-bg);
+  border: 1px solid var(--fp-border);
+  border-radius: 14px;
+  padding: 40px;
+  display: flex;
+  flex-direction: column;
+  gap: 26px;
+}
+
+.station-setup__kicker {
+  font-family: var(--fp-font-mono);
+  font-size: 11px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--fp-accent);
+}
+
+.station-setup__card h1 {
+  font-size: 28px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  margin: 4px 0;
+}
+
+.station-setup__card p {
+  font-size: 15px;
+  color: var(--fp-secondary);
+  line-height: 1.5;
+  margin: 0;
+}
+
+.station-setup__pairing {
+  position: fixed;
+  inset: 0;
+  background: var(--fp-bg);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 60px;
+  gap: 52px;
+}
+
+.station-setup__pairing-head {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  max-width: 640px;
+  text-align: center;
+}
+
+.station-setup__pairing-head h1 {
+  font-size: 34px;
+  font-weight: 700;
+  letter-spacing: -0.025em;
+  margin: 0;
+}
+
+.station-setup__pairing-head p {
+  font-size: 18px;
+  color: var(--fp-secondary);
+  line-height: 1.5;
+  margin: 0;
+}
+
+.station-setup__panels {
+  display: flex;
+  align-items: stretch;
+  gap: 56px;
+}
+
+.station-setup__panel {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 20px;
+  padding: 36px 48px;
+  border: 1px solid var(--fp-border);
+  border-radius: 16px;
+  background: var(--fp-bg-alt);
+}
+
+.station-setup__panel-label {
+  font-family: var(--fp-font-mono);
+  font-size: 11px;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--fp-text-muted);
+}
+
+.station-setup__pin-cells {
+  display: flex;
+  gap: 14px;
+}
+
+.station-setup__pin-cell {
+  width: 92px;
+  height: 118px;
+  border-radius: 12px;
+  background: #fff;
+  border: 1px solid var(--fp-border);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: var(--fp-font-mono);
+  font-size: 62px;
+  font-weight: 500;
+  color: var(--fp-primary);
+}
+
+.station-setup__qr-box {
+  padding: 14px;
+  background: #fff;
+  border: 1px solid var(--fp-border);
+  border-radius: 12px;
+}
+
+.station-setup__status {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  height: 48px;
+  padding: 0 22px;
+  border-radius: 999px;
+  background: var(--fp-bg-alt);
+  border: 1px solid var(--fp-border);
+}
+
+.station-setup__status--connected {
+  background: var(--fp-success-bg);
+  border-color: var(--fp-success-border);
+}
+
+.station-setup__status-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: var(--fp-secondary);
+  animation: fp-pulse 1.4s ease-in-out infinite;
+}
+
+.station-setup__status--connected .station-setup__status-dot {
+  background: var(--fp-status-available);
+  animation: none;
+}
+
+@keyframes fp-pulse {
+  0%,
+  100% {
+    opacity: 0.35;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+
+.station-setup__status-text {
+  font-size: 17px;
+  font-weight: 600;
+  color: var(--fp-secondary);
+}
+
+.station-setup__status--connected .station-setup__status-text {
+  color: var(--fp-success);
+}
+
+.station-setup__cancel {
+  font-size: 14px;
+  color: var(--fp-text-muted);
+  cursor: pointer;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  background: none;
+  border: none;
+  font-family: inherit;
+}

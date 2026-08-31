@@ -1,0 +1,44 @@
+/* Brand tokens — see CLAUDE.md "Brand palette" and the Claude Design
+   project's .dc.html files, which this prototype's UI is built from. */
+:root {
+  /* Brand */
+  --fp-primary: #415364; /* Gray Leasing — navigation, headers */
+  --fp-accent: #6538e5; /* Deep Purple — CTAs, selected states */
+  --fp-accent-hover: #5730c9;
+  --fp-secondary: #637b8f; /* Mid Gray — secondary text, borders */
+
+  /* Backgrounds */
+  --fp-bg: #ffffff;
+  --fp-bg-alt: #f4f5f7;
+  --fp-bg-page: #e9ebee;
+
+  /* Vehicle status */
+  --fp-status-available: #2fa36b;
+  --fp-status-rented: #6538e5;
+  --fp-status-inprep: #c98a1a;
+  --fp-status-inactive: #637b8f;
+
+  /* Semantic */
+  --fp-success: #1f7a52;
+  --fp-success-bg: #eaf6f0;
+  --fp-success-border: #bfe3d0;
+  --fp-danger: #c0392b;
+  --fp-danger-bg: #fdeeec;
+  --fp-danger-border: #f3ccc6;
+  --fp-warning: #8a5a00;
+  --fp-warning-bg: #fdf4e3;
+  --fp-warning-border: #f0dcb0;
+
+  /* Neutrals used throughout the designs */
+  --fp-border: #e4e7eb;
+  --fp-border-strong: #dfe3e8;
+  --fp-border-input: #ccd3da;
+  --fp-text-muted: #8a9aa8;
+  --fp-surface-muted: #eef0f3;
+
+  /* Type */
+  --fp-font-sans: Archivo, Helvetica, sans-serif;
+  --fp-font-mono: 'IBM Plex Mono', monospace;
+
+  color-scheme: light;
+}
