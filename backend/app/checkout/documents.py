@@ -85,6 +85,19 @@ class ScanDocumentResponse(BaseModel):
     error: str | None = None
 
 
+class DocumentScanModeResponse(BaseModel):
+    skip_document_ocr: bool
+
+
+@router.get("/document-scan-mode", response_model=DocumentScanModeResponse)
+async def document_scan_mode() -> DocumentScanModeResponse:
+    """Lets a document-capture UI (client tablet, precheckin portal) know
+    whether OCR is currently mocked (see skip_document_ocr in
+    app/config.py), so it can skip requiring an actual photo while this
+    TEMPORARY testing switch is on. See DocumentsStep.tsx."""
+    return DocumentScanModeResponse(skip_document_ocr=settings.skip_document_ocr)
+
+
 @router.post("/{contract_id}/scan-document", response_model=ScanDocumentResponse)
 async def scan_document(
     contract_id: uuid.UUID,
@@ -219,6 +232,13 @@ def _extract_with_claude(document_type: DocumentType, image_bytes: bytes, media_
         )
     except anthropic.APIError as exc:
         raise DocumentScanError(f"Claude API call failed: {exc}") from exc
+    except Exception as exc:
+        # Catch-all: a client-side/SDK-internal failure (e.g. a response the
+        # installed SDK version fails to parse) isn't an anthropic.APIError,
+        # but per this module's docstring a scan must never surface as a
+        # raw 500 — always degrade to success: false so the executive can
+        # fall back to typing the data in by hand.
+        raise DocumentScanError(f"Claude call failed unexpectedly: {exc}") from exc
 
     text = "".join(block.text for block in response.content if block.type == "text").strip()
     text = _FENCE_RE.sub("", text).strip()

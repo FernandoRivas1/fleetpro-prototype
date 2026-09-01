@@ -571,6 +571,17 @@ export function scanDocument(contractId: string, type: DocumentType, image: File
   return apiFetchForm(`/api/v1/checkout/${contractId}/scan-document`, form);
 }
 
+export interface DocumentScanModeResponse {
+  skip_document_ocr: boolean;
+}
+
+/** TEMPORARY — mirrors the backend's skip_document_ocr switch (see
+ * app/config.py), so a document-capture screen knows whether OCR is
+ * currently mocked and can skip requiring an actual photo. */
+export function getDocumentScanMode(): Promise<DocumentScanModeResponse> {
+  return apiFetch(`/api/v1/checkout/document-scan-mode`);
+}
+
 // --- select-vehicle (app/checkout/flow.py) ----------------------------------
 
 export interface SelectVehicleResponse {
