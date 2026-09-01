@@ -4,6 +4,7 @@ import { ExecutiveApp } from './routes/executive/ExecutiveApp';
 import { ClientApp } from './routes/client/ClientApp';
 import { PreHandoverReportPage } from './routes/reports/PreHandoverReportPage';
 import { NewHandoverReportPage } from './routes/reports/NewHandoverReportPage';
+import { PrecheckinApp } from './routes/precheckin/PrecheckinApp';
 
 export default function App() {
   return (
@@ -12,6 +13,7 @@ export default function App() {
         <Route path="/" element={<Home />} />
         <Route path="/executive" element={<ExecutiveApp />} />
         <Route path="/client" element={<ClientApp />} />
+        <Route path="/precheckin" element={<PrecheckinApp />} />
         <Route path="/report/pre/:preReportId" element={<PreHandoverReportPage />} />
         <Route path="/report/new/:contractId" element={<NewHandoverReportPage />} />
       </Routes>

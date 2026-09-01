@@ -8,7 +8,10 @@ from app.checkout.checkout import router as checkout_router
 from app.checkout.documents import router as documents_router
 from app.checkout.drivers import router as drivers_router
 from app.checkout.flow import router as checkout_flow_router
+from app.checkout.precheckin import admin_router as precheckin_admin_router
+from app.checkout.precheckin import public_router as precheckin_public_router
 from app.checkout.reservations import router as reservations_router
+from app.checkout.tiers import router as tiers_router
 from app.checkout.stations import router as stations_router
 from app.checkout.ws import router as checkout_ws_router
 from app.config import settings
@@ -45,6 +48,9 @@ app.include_router(checkout_flow_router)
 app.include_router(documents_router)
 app.include_router(drivers_router)
 app.include_router(reservations_router)
+app.include_router(tiers_router)
+app.include_router(precheckin_public_router)
+app.include_router(precheckin_admin_router)
 app.include_router(checkout_ws_router)
 app.include_router(fleet_ranking_router)
 app.include_router(fleet_categories_router)

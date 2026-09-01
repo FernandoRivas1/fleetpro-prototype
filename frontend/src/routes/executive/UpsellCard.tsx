@@ -9,9 +9,11 @@ function clp(n: number): string {
 export function UpsellCard({
   status,
   locked,
+  onOffered,
 }: {
   status: CheckoutStatusResponse;
   locked: boolean;
+  onOffered: () => void;
 }) {
   const pairing = useStationPairing();
   const [suggestion, setSuggestion] = useState<UpsellSuggestionResponse | null>(null);
@@ -34,6 +36,7 @@ export function UpsellCard({
       daily_price_difference: suggestion.daily_price_difference,
     });
     setOffered(true);
+    onOffered();
   };
 
   return (

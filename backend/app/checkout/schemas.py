@@ -6,6 +6,7 @@ from pydantic import BaseModel, ConfigDict
 from app.shared.enums import (
     ContractOrigin,
     ContractStatus,
+    CustomerTier,
     DepositMechanism,
     DepositStatus,
     ReservationStatus,
@@ -31,12 +32,14 @@ class DriverRead(BaseModel):
     preferred_color: str | None = None
     preferred_transmission: TransmissionType | None = None
     last_visit_date: date | None = None
+    tier: CustomerTier
 
 
 class ReservationRead(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
     id: uuid.UUID
+    code: str
     driver_first_name: str
     driver_last_name: str
     driver_email: str

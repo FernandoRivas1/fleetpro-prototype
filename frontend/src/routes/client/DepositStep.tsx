@@ -47,6 +47,7 @@ export function DepositStep({
 
   const authorized = deposit?.authorized ?? false;
   const prepaid = deposit?.deposit?.mechanism === 'online_in_advance';
+  const waived = deposit?.deposit?.mechanism === 'waived';
 
   return (
     <main className="client-main">
@@ -81,9 +82,11 @@ export function DepositStep({
             <div className="deposit-authorized__icon">✓</div>
             <div>
               <div style={{ fontSize: 24, fontWeight: 700, color: 'var(--fp-success)' }}>
-                {prepaid ? t.depDonePrepaid : t.depDone}
+                {waived ? t.depDoneWaived : prepaid ? t.depDonePrepaid : t.depDone}
               </div>
-              <div style={{ fontSize: 16, color: '#3d8a68' }}>{prepaid ? t.depSubPrepaid : t.depSubDone}</div>
+              <div style={{ fontSize: 16, color: '#3d8a68' }}>
+                {waived ? t.depSubWaived : prepaid ? t.depSubPrepaid : t.depSubDone}
+              </div>
             </div>
           </div>
         ) : working ? (

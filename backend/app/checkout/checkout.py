@@ -29,7 +29,16 @@ from app.checkout.ws import CheckoutMessageType, manager
 from app.database import get_db
 from app.fleet.models import Vehicle
 from app.fleet.schemas import ACRISSCategoryRead, VehicleRead
-from app.shared.enums import ContractOrigin, ContractStatus, DepositMechanism, DepositStatus, SignatureType
+from app.shared.enums import (
+    ContractOrigin,
+    ContractStatus,
+    CustomerTier,
+    DepositMechanism,
+    DepositStatus,
+    PrecheckinStatus,
+    SignatureType,
+)
+from app.shared.models import Branch
 
 router = APIRouter(prefix="/api/v1/checkout", tags=["checkout"])
 
@@ -47,6 +56,12 @@ class CheckoutStartRequest(BaseModel):
     # omitted, start_checkout() synthesizes a placeholder to satisfy
     # Driver.email's NOT NULL UNIQUE constraint — never surfaced to the UI.
     email: str | None = None
+    # Walk-in only (multi-branch switching, Executive Main design): which
+    # branch's fleet this contract draws from, when the executive has
+    # switched away from the station's own default. Ignored for a
+    # reservation-based start — that contract's branch always follows the
+    # reservation's own pickup_branch_id instead, see start_checkout below.
+    branch_id: uuid.UUID | None = None
 
     @model_validator(mode="after")
     def _exactly_one_source(self) -> "CheckoutStartRequest":
@@ -65,6 +80,11 @@ class CheckoutStartResponse(BaseModel):
     # an unexpired license — the executive UI can skip straight past
     # scanning to confirmation.
     skip_document_scan: bool
+    # True when the originating reservation's Pre Check-in was confirmed
+    # by the executive (and not "unskipped" back on) — the client tablet
+    # can skip both Documents and Data and start at Vehicle. See
+    # _skip_driver_data below and app/checkout/precheckin.py.
+    skip_driver_data: bool
 
 
 class CheckoutStep(str, enum.Enum):
@@ -87,6 +107,7 @@ class CheckoutDriverSummary(BaseModel):
     documents_verified: bool
     license_expiration: date | None = None
     ready_for_checkout: bool
+    tier: CustomerTier
 
 
 class CheckoutStatusResponse(BaseModel):
@@ -108,6 +129,7 @@ class CheckoutStatusResponse(BaseModel):
     extras: list[ContractExtraRead] = []
     deposit: DepositRead | None = None
     signatures: list[DigitalSignatureRead] = []
+    skip_driver_data: bool = False
 
 
 # --- Routes --------------------------------------------------------------
@@ -128,11 +150,22 @@ async def start_checkout(payload: CheckoutStartRequest, db: Session = Depends(ge
         last_name = reservation.driver_last_name
         email = reservation.driver_email
         origin = ContractOrigin.FROM_RESERVATION
+        # The reservation dictates the branch, not the station — the
+        # executive may have switched to browsing a different branch's
+        # reservations (multi-branch switching, Executive Main design)
+        # than the one this station is physically paired to.
+        contract_branch_id = reservation.pickup_branch_id
     else:
         first_name = payload.first_name
         last_name = payload.last_name
         email = payload.email
         origin = ContractOrigin.WALK_IN
+        if payload.branch_id is not None:
+            if db.get(Branch, payload.branch_id) is None:
+                raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Branch not found")
+            contract_branch_id = payload.branch_id
+        else:
+            contract_branch_id = station.branch_id
 
     driver = db.query(Driver).filter(func.lower(Driver.email) == email.lower()).one_or_none() if email else None
     if driver is None:
@@ -146,6 +179,26 @@ async def start_checkout(payload: CheckoutStartRequest, db: Session = Depends(ge
         db.add(driver)
         db.flush()  # surface any constraint violation before creating the contract
 
+    # Pre Check-in (app/checkout/precheckin.py): a confirmed, non-unskipped
+    # remote submission is as good as the executive having verified
+    # documents and confirmed data in person, so copy it onto the driver
+    # exactly like confirm-documents would — but only if this driver isn't
+    # already ready some other way (a returning customer's own on-file
+    # documents take precedence over a possibly-stale pre-check-in copy),
+    # and never with an already-expired license.
+    skip_driver_data = reservation is not None and _reservation_precheckin_confirmed(reservation)
+    if skip_driver_data and not driver.documents_verified:
+        pc = reservation.precheckin
+        today = datetime.now(timezone.utc).date()
+        if pc.license_expiration is not None and pc.license_expiration >= today:
+            driver.national_id_or_passport = pc.national_id_or_passport
+            driver.phone = pc.phone
+            driver.license_number = pc.license_number
+            driver.license_expiration = pc.license_expiration
+            driver.id_photo_url = pc.id_photo_url
+            driver.license_photo_url = pc.license_photo_url
+            driver.documents_verified = True
+
     skip_document_scan = driver.is_ready_for_checkout()
 
     contract = RentalContract(
@@ -153,7 +206,7 @@ async def start_checkout(payload: CheckoutStartRequest, db: Session = Depends(ge
         reservation_id=payload.reservation_id,
         driver_id=driver.id,
         vehicle_id=None,
-        branch_id=station.branch_id,
+        branch_id=contract_branch_id,
         station_id=station.id,
         origin=origin,
         status=ContractStatus.NEW,
@@ -204,6 +257,7 @@ async def start_checkout(payload: CheckoutStartRequest, db: Session = Depends(ge
         driver_id=driver.id,
         origin=origin,
         skip_document_scan=skip_document_scan,
+        skip_driver_data=skip_driver_data,
     )
 
 
@@ -236,6 +290,7 @@ def get_checkout_status(contract_id: uuid.UUID, db: Session = Depends(get_db)) -
             documents_verified=driver.documents_verified,
             license_expiration=driver.license_expiration,
             ready_for_checkout=driver.is_ready_for_checkout(),
+            tier=driver.tier,
         ),
         vehicle=VehicleRead.model_validate(vehicle) if vehicle else None,
         current_category=(
@@ -246,7 +301,18 @@ def get_checkout_status(contract_id: uuid.UUID, db: Session = Depends(get_db)) -
         extras=[ContractExtraRead.model_validate(e) for e in contract.extras],
         deposit=DepositRead.model_validate(contract.deposit) if contract.deposit else None,
         signatures=[DigitalSignatureRead.model_validate(s) for s in contract.signatures],
+        skip_driver_data=contract.reservation is not None and _reservation_precheckin_confirmed(contract.reservation),
     )
+
+
+def _reservation_precheckin_confirmed(reservation: Reservation) -> bool:
+    """True when this reservation's Pre Check-in was reviewed and
+    confirmed by the executive, and they haven't toggled "unskip" back on
+    (see app/checkout/precheckin.py) — read live off the relationship
+    rather than a stored flag, same "infer from what's persisted" spirit
+    as _infer_current_step below."""
+    pc = reservation.precheckin
+    return pc is not None and pc.status is PrecheckinStatus.CONFIRMED and not pc.unskip
 
 
 def _infer_current_step(contract: RentalContract, driver: Driver) -> CheckoutStep:

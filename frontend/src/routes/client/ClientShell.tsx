@@ -31,6 +31,11 @@ export interface UpsellOffer {
  * accepted on the executive side. */
 function deriveInitialStep(status: CheckoutStatusResponse): WizardStep {
   if (status.current_step === 'document_verification') {
+    // A confirmed Pre Check-in (app/checkout/precheckin.py) already had
+    // the executive review this driver's data and documents remotely —
+    // skip both steps rather than just Documents, per the Executive Pre
+    // Check-in design's "skip Documents and Data" toggle.
+    if (status.skip_driver_data) return 'vehicle';
     return status.driver.ready_for_checkout ? 'data' : 'documents';
   }
   if (status.current_step === 'vehicle_selection') return 'vehicle';
@@ -103,6 +108,14 @@ export function ClientShell() {
               .then(() => setStep((s) => (s === 'documents' ? 'data' : s)))
               .catch((err) => console.error(err));
           }
+          break;
+        case 'session_reset':
+          // The executive abandoned this session (Executive Session Panel
+          // design's "Reset session") — nothing to confirm here, just
+          // return to idle same as a fresh, unstarted tablet.
+          setCandidates(null);
+          setUpsellOffer(null);
+          setContractId(null);
           break;
         default:
           break;

@@ -20,6 +20,12 @@ class Settings(BaseSettings):
     anthropic_api_key: str | None = None
     cors_origins: str = "http://localhost:5173"
 
+    # TEMPORARY testing switch — when true, /scan-document returns canned
+    # data instead of calling the Claude API, so manual testing doesn't
+    # burn OCR tokens. Set SKIP_DOCUMENT_OCR=false (or unset) to restore
+    # real scanning. See app/checkout/documents.py.
+    skip_document_ocr: bool = False
+
     # Base URL of the client tablet web app — used to build the QR payload
     # a newly created Station encodes ("{APP_URL}/client?pair=...").
     app_url: str = "http://localhost:5173"

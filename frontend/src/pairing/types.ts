@@ -12,7 +12,8 @@ export type CheckoutMessageType =
   | 'upsell_responded'
   | 'extras_confirmed'
   | 'deposit_authorized'
-  | 'contract_signed';
+  | 'contract_signed'
+  | 'session_reset';
 
 export interface CheckoutMessage {
   type: CheckoutMessageType;

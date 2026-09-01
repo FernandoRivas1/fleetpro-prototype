@@ -27,6 +27,7 @@ from app.checkout.models import (
     RentalContract,
     Reservation,
 )
+from app.checkout import tiers
 from app.checkout.schemas import ContractExtraRead, DepositRead
 from app.checkout.ws import CheckoutMessageType, manager
 from app.database import get_db
@@ -211,6 +212,27 @@ async def select_vehicle(
     # before this one is signed.
     vehicle.status = VehicleStatus.RENTED
 
+    # Gold-tier perk (app/checkout/tiers.py): the deposit is waived, so
+    # there's no in-person or online step to wait for — authorize it,
+    # for $0, the moment a vehicle exists to rent. Only when nothing's
+    # been recorded yet, so an already-paid online-in-advance deposit
+    # (checkout.py's start_checkout) is never silently replaced.
+    driver = db.get(Driver, contract.driver_id)
+    existing_deposit = db.query(Deposit).filter(Deposit.contract_id == contract.id).one_or_none()
+    if driver is not None and existing_deposit is None:
+        amount, forced_mechanism = tiers.deposit_terms(driver)
+        if forced_mechanism is DepositMechanism.WAIVED:
+            db.add(
+                Deposit(
+                    id=uuid.uuid4(),
+                    contract_id=contract.id,
+                    amount=amount,
+                    mechanism=forced_mechanism,
+                    status=DepositStatus.AUTHORIZED,
+                    authorized_at=datetime.now(timezone.utc),
+                )
+            )
+
     db.commit()
 
     await manager.broadcast(
@@ -333,6 +355,9 @@ async def set_extras(
     if contract is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Contract not found")
 
+    driver = db.get(Driver, contract.driver_id)
+    free_extras = tiers.free_extra_names(driver) if driver is not None else frozenset()
+
     # Look up every Extra up front so a bad id fails the whole request
     # before anything is written.
     catalog: dict[uuid.UUID, Extra] = {}
@@ -353,12 +378,15 @@ async def set_extras(
     created: list[ContractExtra] = []
     for item in payload.extras:
         extra = catalog[item.extra_id]
+        # Tier perk (app/checkout/tiers.py): e.g. a Gold driver's
+        # additional-driver and child-seat extras are free.
+        price = 0 if extra.name in free_extras else extra.default_price
         row = ContractExtra(
             id=uuid.uuid4(),
             contract_id=contract_id,
             extra_id=item.extra_id,
             quantity=item.quantity,
-            applied_price=extra.default_price,
+            applied_price=price,
         )
         db.add(row)
         created.append(row)
@@ -428,6 +456,18 @@ async def authorize_deposit(contract_id: uuid.UUID, db: Session = Depends(get_db
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Contract not found")
 
     deposit = db.query(Deposit).filter(Deposit.contract_id == contract_id).one_or_none()
+
+    # Already waived (Gold — see select_vehicle) or already paid online in
+    # advance: this in-person step has nothing left to do. Idempotent
+    # no-op rather than silently replacing it with a full in-person one.
+    if deposit is not None and deposit.mechanism in (DepositMechanism.WAIVED, DepositMechanism.ONLINE_IN_ADVANCE):
+        return DepositRead.model_validate(deposit)
+
+    driver = db.get(Driver, contract.driver_id)
+    # Tier perk (app/checkout/tiers.py): e.g. a Silver driver's in-person
+    # deposit is half the standard amount. forced_mechanism is ignored
+    # here — Gold never reaches this branch, see the guard above.
+    amount = tiers.deposit_terms(driver)[0] if driver is not None else DEPOSIT_AMOUNT_CLP
     now = datetime.now(timezone.utc)
 
     # STUB: replace with a real payment gateway integration.
@@ -435,7 +475,7 @@ async def authorize_deposit(contract_id: uuid.UUID, db: Session = Depends(get_db
         deposit = Deposit(
             id=uuid.uuid4(),
             contract_id=contract_id,
-            amount=DEPOSIT_AMOUNT_CLP,
+            amount=amount,
             mechanism=DepositMechanism.IN_PERSON,
             status=DepositStatus.AUTHORIZED,
             authorized_at=now,
@@ -443,7 +483,7 @@ async def authorize_deposit(contract_id: uuid.UUID, db: Session = Depends(get_db
         db.add(deposit)
     else:
         deposit.mechanism = DepositMechanism.IN_PERSON
-        deposit.amount = DEPOSIT_AMOUNT_CLP
+        deposit.amount = amount
         deposit.status = DepositStatus.AUTHORIZED
         deposit.authorized_at = now
 

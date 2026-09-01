@@ -21,6 +21,19 @@ class TransmissionType(str, enum.Enum):
     AUTOMATIC = "automatic"
 
 
+class CustomerTier(str, enum.Enum):
+    """Loyalty tier (Executive Main design's "commercial conditions"
+    banner) — assigned by the business, not something the executive sets
+    ad hoc in this prototype (no loyalty-program management UI, same
+    "out of scope" spirit as CLAUDE.md's other CRM-adjacent exclusions).
+    See app/checkout/tiers.py for what each tier actually changes."""
+
+    STANDARD = "Standard"
+    SILVER = "Silver"
+    GOLD = "Gold"
+    CORPORATE = "Corporate"
+
+
 class VehicleStatus(str, enum.Enum):
     AVAILABLE = "Available"
     RENTED = "Rented"
@@ -50,6 +63,9 @@ class ContractStatus(str, enum.Enum):
 class DepositMechanism(str, enum.Enum):
     ONLINE_IN_ADVANCE = "online_in_advance"
     IN_PERSON = "in_person"
+    # Gold-tier perk (see app/checkout/tiers.py) — the deposit is
+    # authorized automatically, for $0, the moment a vehicle is selected.
+    WAIVED = "waived"
 
 
 class DepositStatus(str, enum.Enum):
@@ -65,3 +81,13 @@ class SignatureType(str, enum.Enum):
 class HandoverReportStatus(str, enum.Enum):
     PENDING = "pending"
     COMPLETED = "completed"
+
+
+class PrecheckinStatus(str, enum.Enum):
+    """A reservation with no ReservationPrecheckin row at all is "not
+    requested yet" — there's deliberately no NONE member here, see
+    app/checkout/precheckin.py."""
+
+    REQUESTED = "requested"
+    LOADED = "loaded"
+    CONFIRMED = "confirmed"
