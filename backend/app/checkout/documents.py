@@ -18,7 +18,7 @@ import json
 import mimetypes
 import re
 import uuid
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
 from pathlib import Path
 
 import anthropic
@@ -175,7 +175,28 @@ def _get_client() -> anthropic.Anthropic:
 _FENCE_RE = re.compile(r"^```(?:json)?\s*|\s*```$", re.IGNORECASE)
 
 
+_MOCK_DATA: dict[DocumentType, dict[str, str | None]] = {
+    DocumentType.ID: {
+        "first_name": "Test",
+        "last_name": "Driver",
+        "national_id_or_passport": "12.345.678-9",
+        "birth_date": "1990-01-01",
+    },
+    DocumentType.LICENSE: {
+        "license_number": "A1234567",
+        # Always ~2 years out so _is_valid's expiration check keeps passing.
+        "expiration_date": date(datetime.now(timezone.utc).year + 2, 1, 1).isoformat(),
+    },
+}
+
+
 def _extract_with_claude(document_type: DocumentType, image_bytes: bytes, media_type: str) -> dict[str, str | None]:
+    if settings.skip_document_ocr:
+        # TEMPORARY — see the skip_document_ocr docstring in app/config.py.
+        # No network call, no tokens spent; returns fixed data as if OCR
+        # had read it perfectly.
+        return dict(_MOCK_DATA[document_type])
+
     client = _get_client()
     encoded = base64.standard_b64encode(image_bytes).decode("ascii")
 

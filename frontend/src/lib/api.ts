@@ -142,6 +142,7 @@ function qs(params: Record<string, string | undefined>): string {
 
 export interface ReservationRead {
   id: string;
+  code: string;
   driver_first_name: string;
   driver_last_name: string;
   driver_email: string;
@@ -157,7 +158,134 @@ export function listReservations(branchId: string): Promise<ReservationRead[]> {
   return apiFetch(`/api/v1/checkout/reservations${qs({ branch_id: branchId })}`);
 }
 
+// --- Pre Check-in — executive review queue (app/checkout/precheckin.py) ----
+
+export type PrecheckinStatus = 'requested' | 'loaded' | 'confirmed';
+
+export interface PrecheckinRead {
+  status: PrecheckinStatus;
+  contact_email: string;
+  requested_at: string | null;
+  reminder_count: number;
+  loaded_at: string | null;
+  confirmed_at: string | null;
+  national_id_or_passport: string | null;
+  phone: string | null;
+  license_number: string | null;
+  license_expiration: string | null;
+  id_photo_url: string | null;
+  license_photo_url: string | null;
+  unskip: boolean;
+}
+
+export interface PrecheckinQueueItem {
+  reservation: ReservationRead;
+  /** null means "not requested yet" — see PrecheckinStatus. */
+  precheckin: PrecheckinRead | null;
+}
+
+export function listPrecheckinQueue(branchId: string, withinHours?: number): Promise<PrecheckinQueueItem[]> {
+  return apiFetch(
+    `/api/v1/checkout/precheckin${qs({
+      branch_id: branchId,
+      within_hours: withinHours !== undefined ? String(withinHours) : undefined,
+    })}`,
+  );
+}
+
+export interface PrecheckinRequestResponse {
+  reservation_id: string;
+  precheckin: PrecheckinRead;
+  /** No mail provider is wired up for this prototype — the executive
+   * copies/sends this link themselves. See precheckin.py's module docstring. */
+  portal_url: string;
+}
+
+export function requestPrecheckin(reservationId: string, email: string): Promise<PrecheckinRequestResponse> {
+  return apiFetch(`/api/v1/checkout/precheckin/${reservationId}/request`, {
+    method: 'POST',
+    body: JSON.stringify({ email }),
+  });
+}
+
+export function remindPrecheckin(reservationId: string): Promise<PrecheckinRead> {
+  return apiFetch(`/api/v1/checkout/precheckin/${reservationId}/remind`, { method: 'POST' });
+}
+
+export function confirmPrecheckin(reservationId: string): Promise<PrecheckinRead> {
+  return apiFetch(`/api/v1/checkout/precheckin/${reservationId}/confirm`, { method: 'POST' });
+}
+
+export function setPrecheckinUnskip(reservationId: string, unskip: boolean): Promise<PrecheckinRead> {
+  return apiFetch(`/api/v1/checkout/precheckin/${reservationId}/unskip`, {
+    method: 'POST',
+    body: JSON.stringify({ unskip }),
+  });
+}
+
+// --- Pre Check-in — public driver portal (app/checkout/precheckin.py) ------
+//
+// No auth beyond reservation code + last name (see the backend's STUB
+// comments) — reached directly by the driver's own phone/laptop, not
+// behind station pairing.
+
+export interface PrecheckinLookupResponse {
+  reservation_id: string;
+  code: string;
+  driver_first_name: string;
+  driver_last_name: string;
+  pickup_date: string;
+  return_date: string;
+  acriss_category_id: string;
+  /** null means nothing has been submitted for this reservation yet. */
+  status: PrecheckinStatus | null;
+  national_id_or_passport: string | null;
+  phone: string | null;
+  license_number: string | null;
+  license_expiration: string | null;
+}
+
+export function lookupPrecheckin(code: string, lastName: string): Promise<PrecheckinLookupResponse> {
+  return apiFetch('/api/v1/precheckin/lookup', {
+    method: 'POST',
+    body: JSON.stringify({ code, last_name: lastName }),
+  });
+}
+
+export interface PrecheckinSubmitRequest {
+  code: string;
+  last_name: string;
+  national_id_or_passport: string;
+  phone: string;
+  license_number: string;
+  license_expiration: string; // YYYY-MM-DD
+}
+
+export function submitPrecheckin(reservationId: string, body: PrecheckinSubmitRequest): Promise<PrecheckinRead> {
+  return apiFetch(`/api/v1/precheckin/${reservationId}/submit`, {
+    method: 'POST',
+    body: JSON.stringify(body),
+  });
+}
+
+export function scanPrecheckinDocument(
+  reservationId: string,
+  code: string,
+  lastName: string,
+  type: DocumentType,
+  image: File,
+): Promise<ScanDocumentResponse> {
+  const form = new FormData();
+  form.set('code', code);
+  form.set('last_name', lastName);
+  form.set('type', type);
+  form.set('image', image);
+  return apiFetchForm(`/api/v1/precheckin/${reservationId}/scan-document`, form);
+}
+
 // --- Drivers (app/checkout/drivers.py) --------------------------------------
+
+export type CustomerTier = 'Standard' | 'Silver' | 'Gold' | 'Corporate';
 
 export interface DriverRead {
   id: string;
@@ -174,6 +302,7 @@ export interface DriverRead {
   preferred_color: string | null;
   preferred_transmission: 'manual' | 'automatic' | null;
   last_visit_date: string | null;
+  tier: CustomerTier;
 }
 
 /** Resolves to null (not a thrown error) on a 404 — "no driver on file" is
@@ -185,6 +314,22 @@ export async function getDriverByEmail(email: string): Promise<DriverRead | null
     if (err instanceof ApiError && err.status === 404) return null;
     throw err;
   }
+}
+
+// --- Customer loyalty tiers (app/checkout/tiers.py) -------------------------
+
+export interface TierCondition {
+  text: string;
+  value: string;
+}
+
+export interface TierInfo {
+  tier: CustomerTier;
+  conditions: TierCondition[];
+}
+
+export function listTiers(): Promise<TierInfo[]> {
+  return apiFetch('/api/v1/checkout/tiers');
 }
 
 // --- Fleet: categories + candidates (app/fleet/*.py) ------------------------
@@ -258,6 +403,7 @@ export interface CheckoutStartResponse {
   driver_id: string;
   origin: 'from_reservation' | 'walk_in';
   skip_document_scan: boolean;
+  skip_driver_data: boolean;
 }
 
 export function startCheckoutFromReservation(stationId: string, reservationId: string): Promise<CheckoutStartResponse> {
@@ -272,10 +418,19 @@ export function startWalkInCheckout(
   firstName: string,
   lastName: string,
   email?: string,
+  /** Multi-branch switching (Executive Main design) — omit to use the
+   * station's own default branch. */
+  branchId?: string,
 ): Promise<CheckoutStartResponse> {
   return apiFetch('/api/v1/checkout/start', {
     method: 'POST',
-    body: JSON.stringify({ station_id: stationId, first_name: firstName, last_name: lastName, email }),
+    body: JSON.stringify({
+      station_id: stationId,
+      first_name: firstName,
+      last_name: lastName,
+      email,
+      branch_id: branchId,
+    }),
   });
 }
 
@@ -290,6 +445,7 @@ export interface CheckoutDriverSummary {
   documents_verified: boolean;
   license_expiration: string | null;
   ready_for_checkout: boolean;
+  tier: CustomerTier;
 }
 
 export type CheckoutStep =
@@ -315,6 +471,7 @@ export interface CheckoutStatusResponse {
   extras: ContractExtraRead[];
   deposit: DepositRead | null;
   signatures: { id: string; contract_id: string; type: 'contract' | 'handover_report'; timestamp: string }[];
+  skip_driver_data: boolean;
 }
 
 export function getCheckoutStatus(contractId: string): Promise<CheckoutStatusResponse> {
@@ -461,7 +618,7 @@ export interface DepositRead {
   id: string;
   contract_id: string;
   amount: number;
-  mechanism: 'online_in_advance' | 'in_person';
+  mechanism: 'online_in_advance' | 'in_person' | 'waived';
   status: 'pending' | 'authorized';
   authorized_at: string | null;
 }

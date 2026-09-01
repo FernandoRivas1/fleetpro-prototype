@@ -1,6 +1,7 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useStationPairing } from '../../pairing/StationPairingContext';
-import { getDriverByEmail, startWalkInCheckout, type DriverRead } from '../../lib/api';
+import { getDriverByEmail, listTiers, startWalkInCheckout, type DriverRead, type TierInfo } from '../../lib/api';
+import { TierBadge, TierConditions } from './TierBadge';
 
 const EMAIL_RE = /^[^@\s]+@[^@\s]+\.[^@\s]+$/;
 
@@ -13,7 +14,13 @@ function licenseStatus(driver: DriverRead): { text: string; ok: boolean } {
   };
 }
 
-export function WalkInTab({ onSessionStart }: { onSessionStart: (contractId: string) => void }) {
+export function WalkInTab({
+  branchId,
+  onSessionStart,
+}: {
+  branchId: string;
+  onSessionStart: (contractId: string) => void;
+}) {
   const pairing = useStationPairing();
   const [mode, setMode] = useState<'email' | 'guest'>('email');
   const [email, setEmail] = useState('');
@@ -24,6 +31,11 @@ export function WalkInTab({ onSessionStart }: { onSessionStart: (contractId: str
   const [last, setLast] = useState('');
   const [starting, setStarting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [tiers, setTiers] = useState<TierInfo[]>([]);
+
+  useEffect(() => {
+    listTiers().then(setTiers).catch(console.error);
+  }, []);
 
   const doLookup = async () => {
     const clean = email.trim();
@@ -61,6 +73,7 @@ export function WalkInTab({ onSessionStart }: { onSessionStart: (contractId: str
         first.trim(),
         last.trim(),
         mode === 'email' ? email.trim() : undefined,
+        branchId,
       );
       onSessionStart(res.contract_id);
     } catch (err) {
@@ -142,8 +155,11 @@ export function WalkInTab({ onSessionStart }: { onSessionStart: (contractId: str
 
         {client && (
           <div className="walkin-client-card">
-            <div className="walkin-client-card__name">
-              {client.first_name} {client.last_name}
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <div className="walkin-client-card__name">
+                {client.first_name} {client.last_name}
+              </div>
+              <TierBadge tier={client.tier} />
             </div>
             <div className="walkin-client-card__meta">{client.email}</div>
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
@@ -159,6 +175,10 @@ export function WalkInTab({ onSessionStart }: { onSessionStart: (contractId: str
               </div>
             </div>
           </div>
+        )}
+
+        {client && client.tier !== 'Standard' && (
+          <TierConditions tier={client.tier} conditions={tiers.find((t) => t.tier === client.tier)?.conditions ?? []} />
         )}
 
         {showNames && (

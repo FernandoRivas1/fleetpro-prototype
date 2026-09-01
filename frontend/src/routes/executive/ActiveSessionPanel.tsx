@@ -1,10 +1,11 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useStationPairing } from '../../pairing/StationPairingContext';
 import { getCheckoutStatus, type CheckoutStatusResponse } from '../../lib/api';
 import type { CheckoutMessageType } from '../../pairing/types';
 import { DocumentsCard } from './DocumentsCard';
 import { VehiclesCard } from './VehiclesCard';
 import { UpsellCard } from './UpsellCard';
+import { TierBadge } from './TierBadge';
 
 const STEP_LABELS = ['Documents', 'Data', 'Vehicle', 'Extras', 'Deposit', 'Signature'];
 
@@ -47,10 +48,18 @@ export function ActiveSessionPanel({
   // back) — tracked here, lifted above both cards, and lost on reload same
   // as the tablet's own in-memory shortlist would be.
   const [candidatesSent, setCandidatesSent] = useState(false);
+  // Same idea as candidatesSent — offering an upsell is a pure WS push
+  // with no durable server-side state, so it's tracked here too (lifted
+  // above UpsellCard) purely so the reset-session modal can report it.
+  const [upsellOffered, setUpsellOffered] = useState(false);
   // documents_scanned carries the client's fresh OCR read — nothing
   // persists it until confirm-documents runs (see flow.py's docstring), so
   // this is the only place the executive sees it before typing it in.
   const [scannedData, setScannedData] = useState<Record<string, string | null> | null>(null);
+  const [resetOpen, setResetOpen] = useState(false);
+  const [resetting, setResetting] = useState(false);
+  const [toast, setToast] = useState<string | null>(null);
+  const endTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
 
   const refresh = () => {
     getCheckoutStatus(contractId)
@@ -76,6 +85,25 @@ export function ActiveSessionPanel({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [pairing, contractId]);
 
+  useEffect(() => () => clearTimeout(endTimer.current), []);
+
+  // Abandons the in-progress session: tells the tablet to drop back to
+  // idle (session_reset, see ws.py) and returns the executive to search/
+  // walk-in. Deliberately does NOT try to undo anything already persisted
+  // server-side — a verified driver stays verified, the contract row
+  // stays as-is — only the two purely-local, WS-only flags below (sent
+  // shortlist, sent upsell) are actually lost, which is exactly what the
+  // confirmation modal tells the executive before they commit to it.
+  const confirmReset = () => {
+    if (resetting) return;
+    setResetting(true);
+    pairing.send('session_reset', { contract_id: contractId });
+    setResetOpen(false);
+    setToast('Session reset · the tablet is back to the idle screen');
+    // A beat to let the toast register before the panel unmounts.
+    endTimer.current = setTimeout(onSessionEnd, 1100);
+  };
+
   if (error) return <div className="centered-empty">{error}</div>;
   if (!status) return <div className="centered-empty">Loading…</div>;
 
@@ -88,8 +116,11 @@ export function ActiveSessionPanel({
       <div className="session-header">
         <div className="session-header__top">
           <div>
-            <div className="session-header__name">
-              {status.driver.first_name} {status.driver.last_name}
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <div className="session-header__name">
+                {status.driver.first_name} {status.driver.last_name}
+              </div>
+              {status.driver.tier !== 'Standard' && <TierBadge tier={status.driver.tier} />}
             </div>
             <div className="session-header__meta">
               {contractLabel} {status.current_category ? `· ${status.current_category.code}` : ''}
@@ -111,8 +142,8 @@ export function ActiveSessionPanel({
             <div className="exec-chip__dot" />
             {linked ? 'Tablet connected' : 'Tablet not connected'}
           </div>
-          <button type="button" className="btn btn--ghost btn--sm" onClick={onSessionEnd}>
-            New customer
+          <button type="button" className="btn btn--danger-ghost btn--sm" onClick={() => setResetOpen(true)}>
+            Reset session
           </button>
         </div>
 
@@ -135,7 +166,7 @@ export function ActiveSessionPanel({
       <div className="session-body">
         <DocumentsCard status={status} onConfirmed={refresh} scannedData={scannedData} />
         <VehiclesCard status={status} onSent={() => setCandidatesSent(true)} />
-        <UpsellCard status={status} locked={!candidatesSent} />
+        <UpsellCard status={status} locked={!candidatesSent} onOffered={() => setUpsellOffered(true)} />
 
         {['Extras', 'Deposit', 'Signature'].map((label, i) => (
           <div className="session-card session-card--future" key={label}>
@@ -149,6 +180,48 @@ export function ActiveSessionPanel({
           </div>
         ))}
       </div>
+
+      {resetOpen && (
+        <div className="modal-overlay">
+          <div className="modal">
+            <div className="modal__head">
+              <div className="modal__title">Reset the client session?</div>
+              <div className="modal__subtitle">
+                The tablet returns to its idle screen and anything only tracked for this session is discarded. The
+                driver's already-verified documents and the reservation itself are not affected.
+              </div>
+            </div>
+            <div className="reset-loses">
+              <div className="reset-loses__row">
+                <div className="reset-loses__dot" />
+                <div>Vehicle shortlist sent to the tablet</div>
+                <div style={{ flex: 1 }} />
+                <div className={`mono ${candidatesSent ? 'reset-loses__value--lost' : ''}`}>
+                  {candidatesSent ? 'discarded' : 'nothing yet'}
+                </div>
+              </div>
+              <div className="reset-loses__row">
+                <div className="reset-loses__dot" />
+                <div>Upgrade offer sent to the tablet</div>
+                <div style={{ flex: 1 }} />
+                <div className={`mono ${upsellOffered ? 'reset-loses__value--lost' : ''}`}>
+                  {upsellOffered ? 'discarded' : 'nothing yet'}
+                </div>
+              </div>
+            </div>
+            <div className="modal__actions">
+              <button type="button" className="btn btn--ghost" onClick={() => setResetOpen(false)}>
+                Keep the session
+              </button>
+              <button type="button" className="btn btn--danger" disabled={resetting} onClick={confirmReset}>
+                Reset session
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {toast && <div className="toast">{toast}</div>}
     </div>
   );
 }

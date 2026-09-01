@@ -9,8 +9,10 @@ from app.database import Base
 from app.shared.enums import (
     ContractOrigin,
     ContractStatus,
+    CustomerTier,
     DepositMechanism,
     DepositStatus,
+    PrecheckinStatus,
     ReservationStatus,
     SignatureType,
     TransmissionType,
@@ -47,6 +49,11 @@ class Driver(Base, TimestampMixin):
         pg_enum(TransmissionType, "transmission_type")
     )
     last_visit_date: Mapped[date | None] = mapped_column(Date)
+    # Loyalty tier (Executive Main design) — see app/checkout/tiers.py for
+    # what it actually changes (deposit terms, free extras).
+    tier: Mapped[CustomerTier] = mapped_column(
+        pg_enum(CustomerTier, "customer_tier"), nullable=False, default=CustomerTier.STANDARD
+    )
 
     rental_contracts: Mapped[list["RentalContract"]] = relationship(back_populates="driver")
 
@@ -90,6 +97,63 @@ class Reservation(Base, TimestampMixin):
         back_populates="reservation", cascade="all, delete-orphan"
     )
     rental_contracts: Mapped[list["RentalContract"]] = relationship(back_populates="reservation")
+    precheckin: Mapped["ReservationPrecheckin | None"] = relationship(
+        back_populates="reservation", uselist=False, cascade="all, delete-orphan"
+    )
+
+    @property
+    def code(self) -> str:
+        """Human-friendly reservation code (Executive Pre Check-in design's
+        "FP-xxxxx") — derived from the id rather than a separate column,
+        and what the driver types into the pre-check-in portal alongside
+        their last name (see app/checkout/precheckin.py)."""
+        return f"FP-{self.id.hex[:5].upper()}"
+
+
+class ReservationPrecheckin(Base, TimestampMixin):
+    """Pre-arrival driver self-service (Executive Pre Check-in design):
+    the executive sends the driver a link to submit their data and
+    documents before the counter session starts, then reviews and
+    confirms it. A reservation with no row here simply hasn't been asked
+    yet — see PrecheckinStatus.
+
+    Everything below is staged data, same idea as documents.py's OCR
+    proposals: it isn't copied onto a Driver row (and doesn't verify
+    anything) until the executive confirms it AND a contract is actually
+    started from this reservation — see start_checkout in checkout.py.
+
+    STUB: the driver's only "login" for the public portal is
+    Reservation.code plus their last name (see app/checkout/precheckin.py)
+    — good enough for a prototype demo, not real access control. No
+    expiration either, same caveat as reports/pre_handover.py.
+    """
+
+    __tablename__ = "reservation_precheckins"
+
+    id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
+    reservation_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("reservations.id"), unique=True, nullable=False
+    )
+    status: Mapped[PrecheckinStatus] = mapped_column(
+        pg_enum(PrecheckinStatus, "precheckin_status"), nullable=False
+    )
+    contact_email: Mapped[str] = mapped_column(String(255), nullable=False)
+    requested_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    reminder_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    loaded_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    confirmed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    national_id_or_passport: Mapped[str | None] = mapped_column(String(40))
+    phone: Mapped[str | None] = mapped_column(String(30))
+    license_number: Mapped[str | None] = mapped_column(String(40))
+    license_expiration: Mapped[date | None] = mapped_column(Date)
+    id_photo_url: Mapped[str | None] = mapped_column(String(500))
+    license_photo_url: Mapped[str | None] = mapped_column(String(500))
+    # Executive override: still show Documents/Data on the tablet as
+    # confirmation steps even though this reservation is confirmed and
+    # would otherwise skip straight to Vehicle.
+    unskip: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+
+    reservation: Mapped["Reservation"] = relationship(back_populates="precheckin")
 
 
 class ReservationExtra(Base, TimestampMixin):

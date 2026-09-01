@@ -28,7 +28,7 @@ from app.database import SessionLocal
 from app.fleet.models import ACRISSCategory, Vehicle
 from app.models_registry import Base  # noqa: F401 — ensures every model is registered
 from app.reports.models import PreHandoverReport
-from app.shared.enums import ReservationStatus, TransmissionType, VehicleStatus
+from app.shared.enums import CustomerTier, ReservationStatus, TransmissionType, VehicleStatus
 from app.shared.models import Branch, Extra
 
 # The third "driver" persona: intentionally has no Driver row. A reservation
@@ -199,6 +199,10 @@ def seed_drivers(db) -> dict[str, Driver]:
             preferred_color="Gris",
             preferred_transmission=TransmissionType.AUTOMATIC,
             last_visit_date=(now - timedelta(days=76)).date(),
+            # Loyalty tier demo persona: fully verified + Gold, so the
+            # deposit-waiver and free-extras perks (app/checkout/tiers.py)
+            # are visible the moment a check-out starts.
+            tier=CustomerTier.GOLD,
         ),
         # On file, documents verified, but license EXPIRED — must block
         # vehicle selection per the "Critical business rules" in CLAUDE.md.
@@ -217,6 +221,10 @@ def seed_drivers(db) -> dict[str, Driver]:
             preferred_color=None,
             preferred_transmission=TransmissionType.MANUAL,
             last_visit_date=(now - timedelta(days=666)).date(),
+            # Loyalty tier demo persona: Corporate tier but still blocked
+            # by the expired license above — a tier is never a shortcut
+            # past the "Critical business rules" gate in CLAUDE.md.
+            tier=CustomerTier.CORPORATE,
         ),
         # Third persona (walk-in) is deliberately NOT created here — see
         # WALK_IN_* constants above.

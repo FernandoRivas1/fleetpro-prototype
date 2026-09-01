@@ -31,7 +31,7 @@ export function SearchAndWalkIn({
       {tab === 'Search Reservation' ? (
         <ReservationSearchTab branchId={branchId} onSessionStart={onSessionStart} />
       ) : (
-        <WalkInTab onSessionStart={onSessionStart} />
+        <WalkInTab branchId={branchId} onSessionStart={onSessionStart} />
       )}
     </div>
   );

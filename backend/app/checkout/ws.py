@@ -42,6 +42,12 @@ class CheckoutMessageType(str, enum.Enum):
     EXTRAS_CONFIRMED = "extras_confirmed"
     DEPOSIT_AUTHORIZED = "deposit_authorized"
     CONTRACT_SIGNED = "contract_signed"
+    # The executive abandoned the in-progress session (Executive Session
+    # Panel design's "Reset session") — purely a transport signal, same as
+    # every other message here: nothing is undone server-side (a driver's
+    # documents_verified, once set, stays set), this just tells the tablet
+    # to stop wherever it is and return to idle.
+    SESSION_RESET = "session_reset"
 
 
 class CheckoutMessage(BaseModel):
@@ -141,6 +147,12 @@ async def checkout_ws(
 
             if message.type is CheckoutMessageType.CONTRACT_STARTED:
                 _update_active_contract(db, station, message.payload.get("contract_id"))
+            elif message.type is CheckoutMessageType.SESSION_RESET:
+                # Mirrors CONTRACT_STARTED above: keep active_contract_id
+                # current so a reload doesn't resurrect the session either
+                # device just walked away from.
+                station.active_contract_id = None
+                db.commit()
 
             await manager.broadcast(station_id, message.model_dump(mode="json"), sender=websocket)
     except WebSocketDisconnect:

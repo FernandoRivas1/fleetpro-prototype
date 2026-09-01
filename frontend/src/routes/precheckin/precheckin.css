@@ -1,0 +1,203 @@
+/* Public pre check-in portal (no design file to follow for this screen —
+ * built to match the brand tokens/voice of the rest of the app, same
+ * approach as routes/reports/reports.css). An ordinary responsive web
+ * page: the driver's own phone/laptop, not a fixed kiosk viewport. */
+
+.report-page {
+  min-height: 100vh;
+  background: var(--fp-bg-alt);
+  padding: 32px 16px 64px;
+  display: flex;
+  justify-content: center;
+}
+
+.report-container {
+  width: 100%;
+  max-width: 640px;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.report-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.report-header__mark {
+  width: 36px;
+  height: 36px;
+  border-radius: 9px;
+  background: var(--fp-primary);
+  color: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 700;
+  font-size: 16px;
+  flex: none;
+}
+
+.report-header__title {
+  font-size: 20px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  color: var(--fp-primary);
+}
+
+.report-card {
+  background: #fff;
+  border: 1px solid var(--fp-border);
+  border-radius: 14px;
+  padding: 22px 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.report-card h2 {
+  font-size: 17px;
+  font-weight: 700;
+  margin: 0;
+}
+
+.rp-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.rp-field label {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--fp-primary);
+}
+
+.rp-field input {
+  height: 44px;
+  border-radius: 9px;
+  border: 1px solid var(--fp-border-strong);
+  padding: 0 12px;
+  font-size: 15px;
+  color: var(--fp-primary);
+  font-family: inherit;
+  background: #fff;
+}
+
+.rp-field input:focus {
+  outline: none;
+  border-color: var(--fp-accent);
+}
+
+.rp-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 14px;
+}
+
+.rp-btn {
+  height: 48px;
+  padding: 0 20px;
+  border-radius: 10px;
+  border: none;
+  background: var(--fp-accent);
+  color: #fff;
+  font-size: 15px;
+  font-weight: 600;
+  cursor: pointer;
+  font-family: inherit;
+}
+
+.rp-btn:hover {
+  background: var(--fp-accent-hover);
+}
+
+.rp-btn:disabled {
+  background: var(--fp-border-input);
+  cursor: not-allowed;
+}
+
+.rp-error {
+  font-size: 13px;
+  color: var(--fp-danger);
+}
+
+.rp-success {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 14px;
+  text-align: center;
+  padding: 20px 0;
+}
+
+.rp-success__check {
+  width: 64px;
+  height: 64px;
+  border-radius: 50%;
+  background: var(--fp-status-available);
+  color: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 32px;
+  font-weight: 700;
+}
+
+/* ---- Document upload slots ------------------------------------------------ */
+
+.pc-doc-slot {
+  height: 92px;
+  border-radius: 10px;
+  border: 1.5px dashed var(--fp-border-input);
+  background: var(--fp-bg-alt);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  cursor: pointer;
+  text-align: center;
+  padding: 8px;
+}
+
+.pc-doc-slot__label {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--fp-primary);
+}
+
+.pc-doc-slot__state {
+  font-size: 12px;
+  color: var(--fp-text-muted);
+}
+
+.pc-doc-slot--scanning {
+  border-style: solid;
+  border-color: var(--fp-accent);
+}
+
+.pc-doc-slot--scanning .pc-doc-slot__state {
+  color: var(--fp-accent);
+}
+
+.pc-doc-slot--done {
+  border-style: solid;
+  border-color: var(--fp-success-border);
+  background: var(--fp-success-bg);
+}
+
+.pc-doc-slot--done .pc-doc-slot__state {
+  color: var(--fp-success);
+}
+
+.pc-doc-slot--error {
+  border-style: solid;
+  border-color: var(--fp-danger-border);
+  background: var(--fp-danger-bg);
+}
+
+.pc-doc-slot--error .pc-doc-slot__state {
+  color: var(--fp-danger);
+}

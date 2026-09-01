@@ -15,6 +15,11 @@ export function Home() {
             Client tablet
           </button>
         </Link>
+        <Link to="/precheckin">
+          <button type="button" className="debug-panel__button--ghost">
+            Pre check-in portal
+          </button>
+        </Link>
       </div>
     </div>
   );
