@@ -88,7 +88,14 @@ async def confirm_documents(
     driver.license_expiration = payload.license_expiration
     driver.documents_verified = True
 
-    db.commit()
+    try:
+        db.commit()
+    except IntegrityError as exc:
+        db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Another driver is already on file with that national ID / passport number",
+        ) from exc
 
     await manager.broadcast(
         contract.station_id,
