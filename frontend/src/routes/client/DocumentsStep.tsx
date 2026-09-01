@@ -1,6 +1,6 @@
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useStationPairing } from '../../pairing/StationPairingContext';
-import { scanDocument, type DocumentType } from '../../lib/api';
+import { getDocumentScanMode, scanDocument, type DocumentType } from '../../lib/api';
 import { documentsStrings } from './strings';
 import type { WizardStep } from './ClientShell';
 import type { Lang } from './strings';
@@ -15,6 +15,19 @@ const SLOT_META: Record<SlotKey, keyof typeof documentsStrings.en.meta> = {
   licFront: 'licF',
   licBack: 'licB',
 };
+
+// TEMPORARY — a 1x1 transparent PNG stood in for a real photo while OCR is
+// mocked server-side (skip_document_ocr, app/config.py), so testing this
+// screen doesn't require a human to actually photograph a document. Goes
+// away the same day skip_document_ocr is turned back off — see
+// getDocumentScanMode() in lib/api.ts, which is what gates this.
+const PLACEHOLDER_PNG_BASE64 =
+  'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=';
+
+function placeholderDocumentFile(key: SlotKey): File {
+  const bytes = Uint8Array.from(atob(PLACEHOLDER_PNG_BASE64), (c) => c.charCodeAt(0));
+  return new File([bytes], `${key}.png`, { type: 'image/png' });
+}
 
 export function DocumentsStep({
   contractId,
@@ -36,7 +49,14 @@ export function DocumentsStep({
   const [policyOpen, setPolicyOpen] = useState(false);
   const [sent, setSent] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [skipUpload, setSkipUpload] = useState(false);
   const fileInputs = useRef<Record<string, HTMLInputElement | null>>({});
+
+  useEffect(() => {
+    getDocumentScanMode()
+      .then((res) => setSkipUpload(res.skip_document_ocr))
+      .catch(() => {}); // default false — falls back to the real capture flow
+  }, []);
 
   const idKeys: SlotKey[] = docType === 'passport' ? ['passport'] : ['idFront', 'idBack'];
   const licKeys: SlotKey[] = ['licFront', 'licBack'];
@@ -102,7 +122,14 @@ export function DocumentsStep({
       <div
         key={key}
         className={`scan-slot ${slot.state === 'done' ? 'scan-slot--done' : ''} ${slot.state === 'reading' ? 'scan-slot--reading' : ''}`}
-        onClick={() => slot.state !== 'reading' && fileInputs.current[key]?.click()}
+        onClick={() => {
+          if (slot.state === 'reading') return;
+          if (skipUpload) {
+            void capture(key, placeholderDocumentFile(key));
+          } else {
+            fileInputs.current[key]?.click();
+          }
+        }}
       >
         <div className="scan-slot__thumb">
           {slot.state === 'reading' && <div className="scan-slot__spinner" />}

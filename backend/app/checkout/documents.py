@@ -85,6 +85,19 @@ class ScanDocumentResponse(BaseModel):
     error: str | None = None
 
 
+class DocumentScanModeResponse(BaseModel):
+    skip_document_ocr: bool
+
+
+@router.get("/document-scan-mode", response_model=DocumentScanModeResponse)
+async def document_scan_mode() -> DocumentScanModeResponse:
+    """Lets a document-capture UI (client tablet, precheckin portal) know
+    whether OCR is currently mocked (see skip_document_ocr in
+    app/config.py), so it can skip requiring an actual photo while this
+    TEMPORARY testing switch is on. See DocumentsStep.tsx."""
+    return DocumentScanModeResponse(skip_document_ocr=settings.skip_document_ocr)
+
+
 @router.post("/{contract_id}/scan-document", response_model=ScanDocumentResponse)
 async def scan_document(
     contract_id: uuid.UUID,
