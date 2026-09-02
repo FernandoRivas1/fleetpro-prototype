@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { useStationPairing } from '../../pairing/StationPairingContext';
-import { getDocumentScanMode, scanDocument, type DocumentType } from '../../lib/api';
+import { API_BASE_URL, getDocumentScanMode, scanDocument, type DocumentType } from '../../lib/api';
 import { documentsStrings } from './strings';
 import type { WizardStep } from './ClientShell';
 import type { Lang } from './strings';
@@ -50,6 +50,7 @@ export function DocumentsStep({
   const [sent, setSent] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [skipUpload, setSkipUpload] = useState(false);
+  const [viewerKey, setViewerKey] = useState<SlotKey | null>(null);
   const fileInputs = useRef<Record<string, HTMLInputElement | null>>({});
 
   useEffect(() => {
@@ -114,31 +115,51 @@ export function DocumentsStep({
     );
   }
 
+  const retake = (key: SlotKey) => {
+    if (skipUpload) {
+      void capture(key, placeholderDocumentFile(key));
+    } else {
+      fileInputs.current[key]?.click();
+    }
+  };
+
   const renderSlot = (key: SlotKey) => {
     const slot = slots[key] ?? { state: 'empty' as SlotState };
     const [title, hint] = t.meta[SLOT_META[key]];
     const label = slot.state === 'reading' ? t.reading : slot.state === 'done' ? t.captured : hint;
+    const done = slot.state === 'done';
     return (
       <div
         key={key}
-        className={`scan-slot ${slot.state === 'done' ? 'scan-slot--done' : ''} ${slot.state === 'reading' ? 'scan-slot--reading' : ''}`}
+        className={`scan-slot ${done ? 'scan-slot--done' : ''} ${slot.state === 'reading' ? 'scan-slot--reading' : ''}`}
         onClick={() => {
           if (slot.state === 'reading') return;
-          if (skipUpload) {
-            void capture(key, placeholderDocumentFile(key));
-          } else {
-            fileInputs.current[key]?.click();
-          }
+          retake(key);
         }}
       >
-        <div className="scan-slot__thumb">
+        <div
+          className="scan-slot__thumb"
+          onClick={(e) => {
+            if (!done) return;
+            e.stopPropagation();
+            setViewerKey(key);
+          }}
+          style={done ? { cursor: 'zoom-in' } : undefined}
+        >
           {slot.state === 'reading' && <div className="scan-slot__spinner" />}
+          {done && slot.photoUrl && <img src={`${API_BASE_URL}${slot.photoUrl}`} alt={title} />}
+          {slot.state === 'empty' && (
+            <svg width="28" height="22" viewBox="0 0 34 26" fill="none" className="scan-slot__empty-icon">
+              <rect x="1.5" y="1.5" width="31" height="23" rx="4" stroke="currentColor" strokeWidth="2.5" />
+              <circle cx="17" cy="13" r="6" stroke="currentColor" strokeWidth="2.5" />
+            </svg>
+          )}
         </div>
         <div>
           <div className="scan-slot__title">{title}</div>
           <div className="scan-slot__status">{label}</div>
         </div>
-        <div className="scan-slot__action">{slot.state === 'done' ? t.retake : slot.state === 'reading' ? '' : t.tapToScan}</div>
+        <div className="scan-slot__action">{done ? t.retake : slot.state === 'reading' ? '' : t.tapToScan}</div>
         <input
           ref={(el) => {
             fileInputs.current[key] = el;
@@ -223,6 +244,40 @@ export function DocumentsStep({
           {t.continue}
         </button>
       </footer>
+
+      {viewerKey && slots[viewerKey]?.photoUrl && (
+        <div className="doc-viewer-modal" onClick={() => setViewerKey(null)}>
+          <div className="doc-viewer-modal__card" onClick={(e) => e.stopPropagation()}>
+            <div className="doc-viewer-modal__head">
+              <div style={{ fontSize: 22, fontWeight: 700 }}>{t.meta[SLOT_META[viewerKey]][0]}</div>
+              <div style={{ flex: 1 }} />
+              <div className="doc-viewer-modal__close" onClick={() => setViewerKey(null)}>
+                ✕
+              </div>
+            </div>
+            <div className="doc-viewer-modal__photo">
+              <img src={`${API_BASE_URL}${slots[viewerKey]!.photoUrl}`} alt={t.meta[SLOT_META[viewerKey]][0]} />
+            </div>
+            <div className="doc-viewer-modal__foot">
+              <div style={{ flex: 1 }} />
+              <button
+                type="button"
+                className="client-btn--ghost"
+                onClick={() => {
+                  const key = viewerKey;
+                  setViewerKey(null);
+                  retake(key);
+                }}
+              >
+                {t.retake}
+              </button>
+              <button type="button" className="client-btn" onClick={() => setViewerKey(null)}>
+                {t.looksGood}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {policyOpen && (
         <div className="policy-modal" onClick={() => setPolicyOpen(false)}>

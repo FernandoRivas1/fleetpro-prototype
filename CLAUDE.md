@@ -22,6 +22,12 @@ the client.
   directly sees and touches — it should feel premium, not administrative
   (think Orange/SIXT counter experience).
 
+## Client check-out wizard order
+Rental details → Vehicle → Extras → Documents → Data → Deposit → Signature.
+Upselling has no step of its own — it's a sub-screen inside Vehicle, shown
+right after a vehicle is picked. A confirmed Pre Check-in (see below) skips
+straight from Extras to Deposit, omitting both Documents and Data.
+
 ## Pairing model
 The executive computer and the client tablet are paired ONCE per counter
 (a "Station"), not once per customer. Pairing persists across every
@@ -54,7 +60,8 @@ Driver
 
 Reservation  (seeded with sample data; its creation flow is out of scope)
   id, driver_first_name, driver_last_name, driver_email
-  pickup_date, return_date, pickup_branch_id, acriss_category_id
+  pickup_date, return_date, pickup_branch_id, return_branch_id,
+    acriss_category_id
   deposit_done_online (bool)
   status
 
@@ -83,6 +90,12 @@ RentalContract
   origin (from_reservation | walk_in)
   opened_at, departure_km, departure_fuel_level
   status (New | PreOpened | Open)
+  Rental Details step fields (only meaningful for a walk-in — a
+  from_reservation contract reads/writes the Reservation's own fields
+  instead, see app/checkout/flow.py's rental-details endpoints):
+    return_branch_id (nullable), acriss_category_id (nullable),
+    pickup_date (nullable), return_date (nullable),
+    rental_details_confirmed (bool)
 
 ContractExtra
   contract_id, extra_id, quantity, applied_price
@@ -121,13 +134,23 @@ A tier changes:
 A tier is never a shortcut past the license/documents-verified gate below.
 
 ## Critical business rules (enforce in the backend, not just the UI)
-- Cannot proceed to vehicle selection if the driver's license is expired or
-  documents haven't been verified by the executive.
+- The driver's license must be unexpired and documents verified by the
+  executive before the deposit can be authorized, and again before the
+  contract can be signed — both real backend checks (POST
+  .../deposit/authorize and POST .../sign in app/checkout/flow.py), not
+  just step ordering. Vehicle selection itself has no such check: the
+  client wizard now browses/picks a vehicle (and Extras) *before*
+  Documents/Data, so nothing about the driver's documents is known yet at
+  that point — the gate necessarily sits later, at Deposit/Signature,
+  where it still fully blocks an unverified or expired driver from ever
+  reaching a signed contract.
 - The deposit is $500,000 CLP by default; the contract cannot be signed
   without the deposit in "authorized" status. A Gold-tier driver's deposit
   is waived (authorized automatically at $0); a Silver-tier driver's is
   half price ($250,000). See "Customer loyalty tiers" above.
 - The upsell can never be an equal or lower category than the original.
+- A vehicle can't be selected until the client has confirmed the Rental
+  Details step (branch, dates, category) for this contract.
 
 ## Out of scope
 Quoting, Reservation Planner, check-in, settlement, LOP, workshops,

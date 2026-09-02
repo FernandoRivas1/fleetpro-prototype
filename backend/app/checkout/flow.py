@@ -14,7 +14,7 @@ import uuid
 from datetime import date, datetime, timezone
 
 from fastapi import APIRouter, Depends, HTTPException, status
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
@@ -33,10 +33,159 @@ from app.checkout.ws import CheckoutMessageType, manager
 from app.database import get_db
 from app.fleet.models import ACRISSCategory, Vehicle
 from app.fleet.schemas import ACRISSCategoryRead, VehicleRead
-from app.shared.enums import ContractStatus, DepositMechanism, DepositStatus, SignatureType, VehicleStatus
-from app.shared.models import Extra
+from app.shared.enums import (
+    ContractOrigin,
+    ContractStatus,
+    DepositMechanism,
+    DepositStatus,
+    SignatureType,
+    VehicleStatus,
+)
+from app.shared.models import Branch, Extra
+from app.shared.schemas import BranchRead
 
 router = APIRouter(prefix="/api/v1/checkout", tags=["checkout"])
+
+
+# --- rental-details ------------------------------------------------------
+# Step 1 of the wizard (Tablet Rental Details design) — reviews and, until
+# a vehicle is picked, lets the client edit the branch/dates/category this
+# checkout is based on. Backed by the Reservation row for a
+# from_reservation contract, or by RentalContract's own rental_details_*
+# columns for a walk-in, which has no Reservation row — see models.py.
+
+
+class RentalDetailsResponse(BaseModel):
+    contract_id: uuid.UUID
+    origin: ContractOrigin
+    confirmed: bool
+    # False once a vehicle has been selected — the category and branch a
+    # candidate list was drawn from can't change out from under it.
+    editable: bool
+    reservation_code: str | None = None
+    pickup_branch: BranchRead
+    return_branch: BranchRead
+    pickup_date: datetime
+    return_date: datetime
+    # Null only for a walk-in that hasn't picked a category yet.
+    category: ACRISSCategoryRead | None = None
+
+
+class RentalDetailsUpdateRequest(BaseModel):
+    pickup_branch_id: uuid.UUID
+    return_branch_id: uuid.UUID
+    pickup_date: datetime
+    return_date: datetime
+    acriss_category_id: uuid.UUID
+
+    @model_validator(mode="after")
+    def _return_after_pickup(self) -> "RentalDetailsUpdateRequest":
+        if self.return_date <= self.pickup_date:
+            raise ValueError("Return must be after pickup.")
+        return self
+
+
+def _rental_details_response(db: Session, contract: RentalContract) -> RentalDetailsResponse:
+    reservation = db.get(Reservation, contract.reservation_id) if contract.reservation_id else None
+    if reservation is not None:
+        pickup_branch_id = reservation.pickup_branch_id
+        return_branch_id = reservation.return_branch_id or reservation.pickup_branch_id
+        pickup_date = reservation.pickup_date
+        return_date = reservation.return_date
+        category_id: uuid.UUID | None = reservation.acriss_category_id
+        reservation_code = reservation.code
+    else:
+        pickup_branch_id = contract.branch_id
+        return_branch_id = contract.return_branch_id or contract.branch_id
+        # Set at POST /start for every walk-in (checkout.py) — never null
+        # in practice, but the column stays nullable since it means
+        # nothing for a from_reservation contract.
+        assert contract.pickup_date is not None and contract.return_date is not None
+        pickup_date = contract.pickup_date
+        return_date = contract.return_date
+        category_id = contract.acriss_category_id
+        reservation_code = None
+
+    pickup_branch = db.get(Branch, pickup_branch_id)
+    return_branch = db.get(Branch, return_branch_id)
+    category = db.get(ACRISSCategory, category_id) if category_id is not None else None
+
+    return RentalDetailsResponse(
+        contract_id=contract.id,
+        origin=contract.origin,
+        confirmed=contract.rental_details_confirmed,
+        editable=contract.vehicle_id is None,
+        reservation_code=reservation_code,
+        pickup_branch=BranchRead.model_validate(pickup_branch),
+        return_branch=BranchRead.model_validate(return_branch),
+        pickup_date=pickup_date,
+        return_date=return_date,
+        category=ACRISSCategoryRead.model_validate(category) if category is not None else None,
+    )
+
+
+@router.get("/{contract_id}/rental-details", response_model=RentalDetailsResponse)
+def get_rental_details(contract_id: uuid.UUID, db: Session = Depends(get_db)) -> RentalDetailsResponse:
+    contract = db.get(RentalContract, contract_id)
+    if contract is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Contract not found")
+    return _rental_details_response(db, contract)
+
+
+@router.post("/{contract_id}/rental-details", response_model=RentalDetailsResponse)
+async def confirm_rental_details(
+    contract_id: uuid.UUID, payload: RentalDetailsUpdateRequest, db: Session = Depends(get_db)
+) -> RentalDetailsResponse:
+    """The client's "Confirm details" step — save-and-confirm in one call,
+    same shape as confirm-documents/confirm-driver-data below."""
+    contract = db.get(RentalContract, contract_id)
+    if contract is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Contract not found")
+    if contract.vehicle_id is not None:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Rental details are locked once a vehicle has been selected.",
+        )
+
+    for branch_id in (payload.pickup_branch_id, payload.return_branch_id):
+        if db.get(Branch, branch_id) is None:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Branch not found")
+    if db.get(ACRISSCategory, payload.acriss_category_id) is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Category not found")
+
+    if contract.reservation_id is not None:
+        reservation = db.get(Reservation, contract.reservation_id)
+        if reservation is None:  # pragma: no cover - FK guarantees this row exists
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Reservation not found")
+        reservation.pickup_branch_id = payload.pickup_branch_id
+        reservation.return_branch_id = payload.return_branch_id
+        reservation.pickup_date = payload.pickup_date
+        reservation.return_date = payload.return_date
+        reservation.acriss_category_id = payload.acriss_category_id
+    else:
+        contract.return_branch_id = payload.return_branch_id
+        contract.acriss_category_id = payload.acriss_category_id
+        contract.pickup_date = payload.pickup_date
+        contract.return_date = payload.return_date
+
+    # The pickup branch always drives which fleet this contract draws
+    # from (see select_vehicle's vehicle.branch_id == contract.branch_id
+    # check below) — keep it in sync however it got here.
+    contract.branch_id = payload.pickup_branch_id
+    contract.rental_details_confirmed = True
+
+    db.commit()
+    db.refresh(contract)
+
+    await manager.broadcast(
+        contract.station_id,
+        {
+            "type": CheckoutMessageType.RENTAL_DETAILS_CONFIRMED.value,
+            "payload": {"contract_id": str(contract_id)},
+        },
+    )
+
+    return _rental_details_response(db, contract)
 
 
 # --- confirm-documents -------------------------------------------------
@@ -188,6 +337,11 @@ async def select_vehicle(
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT, detail="Contract is already signed; the vehicle can't be changed"
         )
+    if not contract.rental_details_confirmed:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Confirm rental details (branch, dates, category) before selecting a vehicle.",
+        )
 
     vehicle = db.get(Vehicle, payload.vehicle_id)
     if vehicle is None:
@@ -316,8 +470,11 @@ def get_upsell_suggestion(contract_id: uuid.UUID, db: Session = Depends(get_db))
 
 
 def _current_category(db: Session, contract: RentalContract) -> ACRISSCategory | None:
-    """The category to upsell *from*: the already-selected vehicle's
-    category if there is one, else the originating reservation's."""
+    """The category to browse/upsell *from*: the already-selected
+    vehicle's category if there is one, else the originating
+    reservation's, else — a walk-in's own — whatever was set on the
+    Rental Details step (contract.acriss_category_id; see
+    rental_details.py above)."""
     if contract.vehicle_id is not None:
         vehicle = db.get(Vehicle, contract.vehicle_id)
         if vehicle is not None:
@@ -326,6 +483,8 @@ def _current_category(db: Session, contract: RentalContract) -> ACRISSCategory |
         reservation = db.get(Reservation, contract.reservation_id)
         if reservation is not None:
             return db.get(ACRISSCategory, reservation.acriss_category_id)
+    if contract.acriss_category_id is not None:
+        return db.get(ACRISSCategory, contract.acriss_category_id)
     return None
 
 
@@ -455,6 +614,18 @@ async def authorize_deposit(contract_id: uuid.UUID, db: Session = Depends(get_db
     if contract is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Contract not found")
 
+    # The "Critical business rules" gate from CLAUDE.md — verified
+    # documents, unexpired license — now that Vehicle comes before
+    # Documents in the wizard (Tablet Rental Details design), it can no
+    # longer live at vehicle-selection time; it blocks here and at
+    # sign_contract below instead, both real backend checks either way.
+    driver = db.get(Driver, contract.driver_id)
+    if driver is None or not driver.is_ready_for_checkout():
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Driver's documents must be verified, with an unexpired license, before the deposit can be authorized.",
+        )
+
     deposit = db.query(Deposit).filter(Deposit.contract_id == contract_id).one_or_none()
 
     # Already waived (Gold — see select_vehicle) or already paid online in
@@ -463,7 +634,6 @@ async def authorize_deposit(contract_id: uuid.UUID, db: Session = Depends(get_db
     if deposit is not None and deposit.mechanism in (DepositMechanism.WAIVED, DepositMechanism.ONLINE_IN_ADVANCE):
         return DepositRead.model_validate(deposit)
 
-    driver = db.get(Driver, contract.driver_id)
     # Tier perk (app/checkout/tiers.py): e.g. a Silver driver's in-person
     # deposit is half the standard amount. forced_mechanism is ignored
     # here — Gold never reaches this branch, see the guard above.

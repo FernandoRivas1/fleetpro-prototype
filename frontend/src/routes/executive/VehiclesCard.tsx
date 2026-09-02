@@ -1,12 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useStationPairing } from '../../pairing/StationPairingContext';
-import {
-  getCandidates,
-  listAcrissCategories,
-  type ACRISSCategoryRead,
-  type CandidateVehicle,
-  type CheckoutStatusResponse,
-} from '../../lib/api';
+import { getCandidates, type CandidateVehicle, type CheckoutStatusResponse } from '../../lib/api';
 
 const MAX_SHORTLIST = 3;
 
@@ -24,25 +18,23 @@ export function VehiclesCard({
   onSent: () => void;
 }) {
   const pairing = useStationPairing();
-  // ready_for_checkout is the combined gate from CLAUDE.md's business rule
-  // (documents verified AND license not expired) — documents_verified
-  // alone isn't enough: a driver can be verified-on-file with a since-
-  // expired license (see Driver.is_ready_for_checkout in the backend).
-  const locked = !status.driver.ready_for_checkout;
+  // Vehicle selection no longer waits on document verification (that gate
+  // moved to deposit-authorize/sign — see CLAUDE.md's "Critical business
+  // rules" and flow.py) now that Vehicle comes before Documents in the
+  // wizard (Tablet Rental Details design). It only waits on the Rental
+  // Details step being confirmed — select-vehicle enforces this same
+  // rule server-side (409 otherwise), this is just the matching UI gate.
+  const locked = !status.rental_details_confirmed;
 
-  const [categories, setCategories] = useState<ACRISSCategoryRead[]>([]);
-  const [categoryId, setCategoryId] = useState<string | null>(status.current_category?.id ?? null);
+  // Both origins now have a category by the time this card is reachable:
+  // a reservation's own, or a walk-in's own choice from the Rental
+  // Details step (Tablet Rental Details design) — see checkout.py's
+  // _current_category. No inline picker needed here any more.
+  const categoryId = status.current_category?.id ?? null;
   const [candidates, setCandidates] = useState<CandidateVehicle[] | null>(null);
   const [picks, setPicks] = useState<Set<string>>(new Set());
   const [sent, setSent] = useState(false);
   const [error, setError] = useState<string | null>(null);
-
-  // Walk-ins have no reservation category — offer a picker (see the
-  // "Adaptations from the mock" note in the stage-2 plan).
-  const needsCategoryPicker = !status.current_category;
-  useEffect(() => {
-    if (needsCategoryPicker) listAcrissCategories().then(setCategories).catch(console.error);
-  }, [needsCategoryPicker]);
 
   useEffect(() => {
     if (locked || !categoryId) return;
@@ -76,7 +68,7 @@ export function VehiclesCard({
     <div className={`session-card ${locked ? 'session-card--locked' : ''}`}>
       <div className="session-card__head">
         <div className={`session-card__badge ${!locked ? (sent ? 'session-card__badge--done' : 'session-card__badge--active') : ''}`}>
-          2
+          1
         </div>
         <div className="session-card__title">Candidate Vehicles</div>
         <div className={`session-card__state ${sent ? 'session-card__state--done' : ''}`}>
@@ -95,18 +87,8 @@ export function VehiclesCard({
 
       {!locked && (
         <div className="session-card__body">
-          {needsCategoryPicker && (
-            <div className="category-picker">
-              <div className="doc-slot__label">Category</div>
-              <select value={categoryId ?? ''} onChange={(e) => setCategoryId(e.target.value || null)}>
-                <option value="">Select a category…</option>
-                {categories.map((c) => (
-                  <option key={c.id} value={c.id}>
-                    {c.code} · {c.name}
-                  </option>
-                ))}
-              </select>
-            </div>
+          {!categoryId && (
+            <div className="locked-hint">Waiting for the client to confirm rental details (branch, dates, category).</div>
           )}
 
           {error && <div className="field__error">{error}</div>}

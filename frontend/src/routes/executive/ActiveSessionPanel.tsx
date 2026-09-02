@@ -7,23 +7,30 @@ import { VehiclesCard } from './VehiclesCard';
 import { UpsellCard } from './UpsellCard';
 import { TierBadge } from './TierBadge';
 
-const STEP_LABELS = ['Documents', 'Data', 'Vehicle', 'Extras', 'Deposit', 'Signature'];
+// Order per the Tablet *.dc.html designs: Rental details -> Vehicle ->
+// Extras -> Documents -> Data -> Deposit -> Signature.
+const STEP_LABELS = ['Rental details', 'Vehicle', 'Extras', 'Documents', 'Data', 'Deposit', 'Signature'];
 
 // Backend CheckoutStep (persisted-state-derived, see checkout.py) mapped
-// onto the design's 6-step UI — coarser than the live WS step stream since
-// "Data" (client-side confirmation, stage 3) isn't tracked server-side.
+// onto the design's 7-step UI — coarser than the live WS step stream since
+// "Data" (client-side confirmation) isn't tracked server-side, and
+// "Extras" vs "Deposit" can't be told apart from persisted state alone
+// once a vehicle is picked (same limitation as before the reorder, just
+// applied at a different point — see checkout.py's _infer_current_step).
 const STEP_INDEX: Record<CheckoutStatusResponse['current_step'], number> = {
-  document_verification: 0,
-  vehicle_selection: 2,
-  extras_and_deposit: 3,
-  awaiting_signature: 5,
-  awaiting_handover: 5,
-  completed: 5,
+  rental_details: 0,
+  vehicle_selection: 1,
+  extras_and_deposit: 2,
+  document_verification: 3,
+  awaiting_signature: 6,
+  awaiting_handover: 6,
+  completed: 6,
 };
 
 // Re-fetch status.py's reload-safe snapshot whenever one of these arrives —
 // simpler and more correct than hand-patching local state per message type.
 const RESYNC_ON: CheckoutMessageType[] = [
+  'rental_details_confirmed',
   'documents_confirmed_by_executive',
   'driver_data_confirmed',
   'vehicle_selected',
@@ -56,6 +63,10 @@ export function ActiveSessionPanel({
   // persists it until confirm-documents runs (see flow.py's docstring), so
   // this is the only place the executive sees it before typing it in.
   const [scannedData, setScannedData] = useState<Record<string, string | null> | null>(null);
+  // Same message's photos map (slot key -> photo_url) — lets the executive
+  // actually see what the client scanned instead of a plain placeholder,
+  // same as scannedData above: never persisted, gone on reload.
+  const [scannedPhotos, setScannedPhotos] = useState<Record<string, string | null> | null>(null);
   const [resetOpen, setResetOpen] = useState(false);
   const [resetting, setResetting] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
@@ -70,6 +81,7 @@ export function ActiveSessionPanel({
   useEffect(() => {
     setStatus(null);
     setScannedData(null);
+    setScannedPhotos(null);
     refresh();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [contractId]);
@@ -80,6 +92,7 @@ export function ActiveSessionPanel({
       if (message.type === 'contract_signed') onSessionEnd();
       if (message.type === 'documents_scanned') {
         setScannedData((message.payload.ocr as Record<string, string | null>) ?? null);
+        setScannedPhotos((message.payload.photos as Record<string, string | null>) ?? null);
       }
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -130,7 +143,7 @@ export function ActiveSessionPanel({
           <div>
             <div className="session-header__step-label">Client is on</div>
             <div className="session-header__step-value">
-              Step {stepIdx + 1} of 6 — {STEP_LABELS[stepIdx]}
+              Step {stepIdx + 1} of {STEP_LABELS.length} — {STEP_LABELS[stepIdx]}
             </div>
           </div>
           <div className="live-badge">
@@ -163,12 +176,18 @@ export function ActiveSessionPanel({
         </div>
       </div>
 
+      {/* Reordered to match the client's own new order (Tablet Rental
+          Details design): Vehicle -> Upsell -> ... -> Documents. Extras,
+          Data, and Signature stay pure client self-service with no
+          executive card, same as Data always was — only Deposit and
+          Signature get a "built in a later stage" placeholder, matching
+          the set that had one before this reorder too. */}
       <div className="session-body">
-        <DocumentsCard status={status} onConfirmed={refresh} scannedData={scannedData} />
         <VehiclesCard status={status} onSent={() => setCandidatesSent(true)} />
         <UpsellCard status={status} locked={!candidatesSent} onOffered={() => setUpsellOffered(true)} />
+        <DocumentsCard status={status} onConfirmed={refresh} scannedData={scannedData} scannedPhotos={scannedPhotos} />
 
-        {['Extras', 'Deposit', 'Signature'].map((label, i) => (
+        {['Deposit', 'Signature'].map((label, i) => (
           <div className="session-card session-card--future" key={label}>
             <div className="session-card__badge">{i + 4}</div>
             <div className="session-card__title" style={{ color: '#a9b4bd' }}>

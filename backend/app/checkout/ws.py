@@ -32,6 +32,7 @@ WS_CLOSE_INVALID_TOKEN = 4401
 class CheckoutMessageType(str, enum.Enum):
     CONTRACT_STARTED = "contract_started"
     STEP_UPDATED = "step_updated"
+    RENTAL_DETAILS_CONFIRMED = "rental_details_confirmed"
     DOCUMENTS_SCANNED = "documents_scanned"
     DOCUMENTS_CONFIRMED_BY_EXECUTIVE = "documents_confirmed_by_executive"
     DRIVER_DATA_CONFIRMED = "driver_data_confirmed"

@@ -4,9 +4,58 @@
 // premium and touch-first rather than administrative.
 export type Lang = 'en' | 'es';
 
+// Order per the Tablet *.dc.html designs: Rental details -> Vehicle ->
+// Extras -> Documents -> Data -> Deposit -> Signature. Upselling has no
+// entry of its own — it's a sub-screen inside the Vehicle step, same as
+// before the reorder.
 export const STEP_LABELS: Record<Lang, string[]> = {
-  en: ['Documents', 'Data', 'Vehicle', 'Extras', 'Deposit', 'Signature'],
-  es: ['Documentos', 'Datos', 'Vehículo', 'Extras', 'Garantía', 'Firma'],
+  en: ['Rental details', 'Vehicle', 'Extras', 'Documents', 'Data', 'Deposit', 'Signature'],
+  es: ['Arriendo', 'Vehículo', 'Extras', 'Documentos', 'Datos', 'Garantía', 'Firma'],
+};
+
+export const rentalDetailsStrings = {
+  en: {
+    title: 'Your rental details',
+    noteReservation: 'From your reservation. Tap any field to change it.',
+    noteWalkin: 'Entered by the executive at the counter. Please check it and correct anything.',
+    chipWalkin: 'Walk-in',
+    pickup: 'Pick-up',
+    dropoff: 'Return',
+    branch: 'Branch',
+    date: 'Date',
+    time: 'Time',
+    groupLabel: 'Car group',
+    durationLabel: 'Duration',
+    days: (n: number) => (n === 1 ? '1 day' : `${n} days`),
+    durationSub: 'Rate confirmed at the counter',
+    back: 'Back',
+    idle: 'Everything correct?',
+    needsCategory: 'Choose a car group to continue.',
+    needsDates: 'Return must be after pick-up.',
+    confirmed: 'Details confirmed ✓',
+    cta: 'Confirm details',
+  },
+  es: {
+    title: 'Los datos de su arriendo',
+    noteReservation: 'Desde su reserva. Toque cualquier campo para cambiarlo.',
+    noteWalkin: 'Ingresados por el ejecutivo en el mesón. Revíselos y corrija lo que sea necesario.',
+    chipWalkin: 'Sin reserva',
+    pickup: 'Retiro',
+    dropoff: 'Devolución',
+    branch: 'Sucursal',
+    date: 'Fecha',
+    time: 'Hora',
+    groupLabel: 'Grupo de vehículo',
+    durationLabel: 'Duración',
+    days: (n: number) => (n === 1 ? '1 día' : `${n} días`),
+    durationSub: 'Tarifa confirmada en el mesón',
+    back: 'Atrás',
+    idle: '¿Está todo correcto?',
+    needsCategory: 'Elija un grupo de vehículo para continuar.',
+    needsDates: 'La devolución debe ser posterior al retiro.',
+    confirmed: 'Datos confirmados ✓',
+    cta: 'Confirmar datos',
+  },
 };
 
 export const documentsStrings = {
@@ -36,6 +85,7 @@ export const documentsStrings = {
     tapToScan: 'Tap to scan',
     replace: 'Replace',
     retake: 'Retake',
+    looksGood: 'Looks good',
     onePhotoLeft: 'One photo left',
     photosLeft: (n: number) => `${n} photos left`,
     needPolicy: 'Please accept the data policy to continue',
@@ -95,6 +145,7 @@ export const documentsStrings = {
     tapToScan: 'Toque para escanear',
     replace: 'Reemplazar',
     retake: 'Repetir',
+    looksGood: 'Se ve bien',
     onePhotoLeft: 'Queda una foto',
     photosLeft: (n: number) => `Quedan ${n} fotos`,
     needPolicy: 'Acepte la política de datos para continuar',

@@ -46,7 +46,7 @@ export function DataStep({
         phone: phone.trim(),
       });
       await refreshStatus();
-      goTo('vehicle');
+      goTo('deposit');
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
     } finally {

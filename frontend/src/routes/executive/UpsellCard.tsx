@@ -43,7 +43,7 @@ export function UpsellCard({
     <div className={`session-card ${locked ? 'session-card--locked' : ''}`}>
       <div className="session-card__head">
         <div className={`session-card__badge ${!locked ? (offered ? 'session-card__badge--done' : 'session-card__badge--active') : ''}`}>
-          3
+          2
         </div>
         <div className="session-card__title">Upselling</div>
         <div className={`session-card__state ${offered ? 'session-card__state--done' : ''}`}>

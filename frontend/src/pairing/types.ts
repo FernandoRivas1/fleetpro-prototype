@@ -3,6 +3,7 @@
 export type CheckoutMessageType =
   | 'contract_started'
   | 'step_updated'
+  | 'rental_details_confirmed'
   | 'documents_scanned'
   | 'documents_confirmed_by_executive'
   | 'driver_data_confirmed'
