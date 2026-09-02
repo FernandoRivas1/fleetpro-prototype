@@ -15,7 +15,7 @@ a reloading device missed.
 """
 import enum
 import uuid
-from datetime import date, datetime, timezone
+from datetime import date, datetime, timedelta, timezone
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel, model_validator
@@ -88,6 +88,13 @@ class CheckoutStartResponse(BaseModel):
 
 
 class CheckoutStep(str, enum.Enum):
+    # Wizard order (Tablet Rental Details design): Rental details -> Vehicle
+    # -> Extras -> Documents -> Data -> Deposit -> Signature. The four
+    # values below are unchanged from before that reorder — see
+    # _infer_current_step for how they now map onto the new order; this
+    # is still a coarse, best-effort snapshot (module docstring), not a
+    # 1:1 step enum.
+    RENTAL_DETAILS = "rental_details"
     DOCUMENT_VERIFICATION = "document_verification"
     VEHICLE_SELECTION = "vehicle_selection"
     EXTRAS_AND_DEPOSIT = "extras_and_deposit"
@@ -130,6 +137,7 @@ class CheckoutStatusResponse(BaseModel):
     deposit: DepositRead | None = None
     signatures: list[DigitalSignatureRead] = []
     skip_driver_data: bool = False
+    rental_details_confirmed: bool = False
 
 
 # --- Routes --------------------------------------------------------------
@@ -185,12 +193,27 @@ async def start_checkout(payload: CheckoutStartRequest, db: Session = Depends(ge
     # exactly like confirm-documents would — but only if this driver isn't
     # already ready some other way (a returning customer's own on-file
     # documents take precedence over a possibly-stale pre-check-in copy),
-    # and never with an already-expired license.
-    skip_driver_data = reservation is not None and _reservation_precheckin_confirmed(reservation)
-    if skip_driver_data and not driver.documents_verified:
+    # and never with an already-expired license. Also never with a
+    # national_id_or_passport that collides with a *different* driver
+    # (drivers.national_id_or_passport is unique) — same conflict
+    # confirm-documents guards against below, just reached a different
+    # way here: two people's pre-check-in submissions naming the same
+    # document number. Rather than crash the whole check-out start, fall
+    # back to skip_driver_data=False so the client goes through the
+    # normal Documents/Data screens and the executive resolves it there.
+    already_ready = driver.documents_verified
+    precheckin_confirmed = reservation is not None and _reservation_precheckin_confirmed(reservation)
+    copied_from_precheckin = False
+    if precheckin_confirmed and not already_ready:
         pc = reservation.precheckin
         today = datetime.now(timezone.utc).date()
-        if pc.license_expiration is not None and pc.license_expiration >= today:
+        national_id_taken = pc.national_id_or_passport is not None and (
+            db.query(Driver)
+            .filter(Driver.national_id_or_passport == pc.national_id_or_passport, Driver.id != driver.id)
+            .first()
+            is not None
+        )
+        if pc.license_expiration is not None and pc.license_expiration >= today and not national_id_taken:
             driver.national_id_or_passport = pc.national_id_or_passport
             driver.phone = pc.phone
             driver.license_number = pc.license_number
@@ -198,8 +221,20 @@ async def start_checkout(payload: CheckoutStartRequest, db: Session = Depends(ge
             driver.id_photo_url = pc.id_photo_url
             driver.license_photo_url = pc.license_photo_url
             driver.documents_verified = True
+            copied_from_precheckin = True
+
+    skip_driver_data = already_ready or copied_from_precheckin
 
     skip_document_scan = driver.is_ready_for_checkout()
+
+    # Rental Details step (Tablet Rental Details design): a walk-in has no
+    # Reservation row to hold these, so seed sensible starting values
+    # directly on the contract — "pickup" is right now, for one day,
+    # returning to the same branch — which the client can then edit
+    # before confirming. A from_reservation contract leaves these null:
+    # it reads/writes the Reservation's own fields instead (see
+    # rental_details.py's _rental_details_response).
+    now = datetime.now(timezone.utc)
 
     contract = RentalContract(
         id=uuid.uuid4(),
@@ -210,6 +245,9 @@ async def start_checkout(payload: CheckoutStartRequest, db: Session = Depends(ge
         station_id=station.id,
         origin=origin,
         status=ContractStatus.NEW,
+        pickup_date=None if reservation is not None else now,
+        return_date=None if reservation is not None else now + timedelta(days=1),
+        return_branch_id=None if reservation is not None else contract_branch_id,
     )
     db.add(contract)
     # Station.active_contract_id has no ORM relationship() (see its
@@ -225,7 +263,6 @@ async def start_checkout(payload: CheckoutStartRequest, db: Session = Depends(ge
     # Deposit on the contract, so GET /deposit and POST /sign see it
     # without asking the customer to pay again at the counter.
     if reservation is not None and reservation.deposit_done_online:
-        now = datetime.now(timezone.utc)
         db.add(
             Deposit(
                 id=uuid.uuid4(),
@@ -302,6 +339,7 @@ def get_checkout_status(contract_id: uuid.UUID, db: Session = Depends(get_db)) -
         deposit=DepositRead.model_validate(contract.deposit) if contract.deposit else None,
         signatures=[DigitalSignatureRead.model_validate(s) for s in contract.signatures],
         skip_driver_data=contract.reservation is not None and _reservation_precheckin_confirmed(contract.reservation),
+        rental_details_confirmed=contract.rental_details_confirmed,
     )
 
 
@@ -317,7 +355,15 @@ def _reservation_precheckin_confirmed(reservation: Reservation) -> bool:
 
 def _infer_current_step(contract: RentalContract, driver: Driver) -> CheckoutStep:
     """Best-effort step derived from persisted state only (see module
-    docstring) — coarser than the live WebSocket step_updated stream."""
+    docstring) — coarser than the live WebSocket step_updated stream.
+
+    Reordered wizard (Tablet Rental Details design): Rental details ->
+    Vehicle -> Extras -> Documents -> Data -> Deposit -> Signature. Vehicle
+    selection no longer implies documents are verified (that gate moved to
+    deposit-authorize/sign — see flow.py), so DOCUMENT_VERIFICATION is
+    checked *after* vehicle_id here, not before — it only means "vehicle
+    picked, but still can't reach deposit" now, never "hasn't started."
+    """
     if contract.status is ContractStatus.OPEN:
         return CheckoutStep.COMPLETED
     if any(sig.type is SignatureType.CONTRACT for sig in contract.signatures):
@@ -325,7 +371,9 @@ def _infer_current_step(contract: RentalContract, driver: Driver) -> CheckoutSte
     if contract.deposit is not None and contract.deposit.status is DepositStatus.AUTHORIZED:
         return CheckoutStep.AWAITING_SIGNATURE
     if contract.vehicle_id is not None:
+        if not driver.is_ready_for_checkout():
+            return CheckoutStep.DOCUMENT_VERIFICATION
         return CheckoutStep.EXTRAS_AND_DEPOSIT
-    if not driver.is_ready_for_checkout():
-        return CheckoutStep.DOCUMENT_VERIFICATION
+    if not contract.rental_details_confirmed:
+        return CheckoutStep.RENTAL_DETAILS
     return CheckoutStep.VEHICLE_SELECTION

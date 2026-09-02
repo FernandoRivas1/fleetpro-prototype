@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { listExtras, setExtras, type CheckoutStatusResponse, type ExtraRead } from '../../lib/api';
 import { extrasStrings, type Lang } from './strings';
-import type { WizardStep } from './ClientShell';
+import { nextAfterExtras, type WizardStep } from './ClientShell';
 
 const MAX_QTY = 3;
 
@@ -10,6 +10,7 @@ function clp(n: number): string {
 }
 
 export function ExtrasStep({
+  status,
   contractId,
   lang,
   refreshStatus,
@@ -52,7 +53,7 @@ export function ExtrasStep({
         .map(([extra_id, quantity]) => ({ extra_id, quantity }));
       await setExtras(contractId, items);
       await refreshStatus();
-      goTo('deposit');
+      goTo(nextAfterExtras(status));
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
     } finally {

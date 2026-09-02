@@ -83,6 +83,13 @@ class Reservation(Base, TimestampMixin):
     pickup_date: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
     return_date: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
     pickup_branch_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("branches.id"), nullable=False)
+    # Nullable: older/seeded reservations predate this column — treated as
+    # "same as pickup" wherever read (see rental_details.py), and backfilled
+    # to that value by the migration that introduced it, so in practice
+    # every row has one. Genuinely optional going forward: the Rental
+    # Details step (Tablet Rental Details design) lets a rental end at a
+    # different branch than it started.
+    return_branch_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("branches.id"))
     acriss_category_id: Mapped[uuid.UUID] = mapped_column(
         ForeignKey("acriss_categories.id"), nullable=False
     )
@@ -217,6 +224,25 @@ class RentalContract(Base, TimestampMixin):
         nullable=False,
         default=ContractStatus.NEW,
     )
+
+    # --- Rental Details step (Tablet Rental Details design) -----------
+    # Only meaningful for a walk-in (reservation_id is None): a
+    # reservation-based contract's rental details live on the Reservation
+    # row instead (pickup_date/return_date/pickup_branch_id/
+    # return_branch_id/acriss_category_id there), since those are
+    # properties of the reusable reservation, not the checkout session —
+    # see app/checkout/rental_details.py, which reads/writes whichever
+    # side applies. return_branch_id defaults to branch_id (same-branch
+    # return) until the client edits it.
+    return_branch_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("branches.id"))
+    acriss_category_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("acriss_categories.id"))
+    pickup_date: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    return_date: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    # True once the client has confirmed this step (either origin) — the
+    # persisted signal _infer_current_step (checkout.py) uses to tell
+    # "still on Rental Details" apart from "already browsing vehicles",
+    # both of which otherwise look identical (vehicle_id is still null).
+    rental_details_confirmed: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
 
     driver: Mapped["Driver"] = relationship(back_populates="rental_contracts")
     reservation: Mapped["Reservation | None"] = relationship(back_populates="rental_contracts")

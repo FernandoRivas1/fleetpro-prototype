@@ -4,6 +4,7 @@ import { getCheckoutStatus, getStation, listBranches, type CheckoutStatusRespons
 import { IdleScreen } from './IdleScreen';
 import { useLanguage } from './LanguageContext';
 import { STEP_LABELS } from './strings';
+import { RentalDetailsStep } from './RentalDetailsStep';
 import { DocumentsStep } from './DocumentsStep';
 import { DataStep } from './DataStep';
 import { VehicleStep } from './VehicleStep';
@@ -14,12 +15,38 @@ import { SignatureStep } from './SignatureStep';
 import { ResultStep } from './ResultStep';
 import './client.css';
 
-export type WizardStep = 'documents' | 'data' | 'vehicle' | 'upsell' | 'extras' | 'deposit' | 'signature' | 'result';
+// Order per the Tablet *.dc.html designs: Rental details -> Vehicle ->
+// Extras -> Documents -> Data -> Deposit -> Signature. 'upsell' has no
+// step-bar entry of its own — see STEP_LABELS/strings.ts — it's a
+// sub-screen inside 'vehicle'.
+export type WizardStep =
+  | 'rentalDetails'
+  | 'vehicle'
+  | 'upsell'
+  | 'extras'
+  | 'documents'
+  | 'data'
+  | 'deposit'
+  | 'signature'
+  | 'result';
 
 export interface UpsellOffer {
   category: ACRISSCategoryRead;
   vehicle: VehicleRead;
   daily_price_difference: number;
+}
+
+/** Where the wizard continues once Extras is confirmed — shared between
+ * the reload-resume derivation below and ExtrasStep's own forward
+ * navigation, since Documents/Data now come *after* Extras (Tablet
+ * Rental Details design's reorder), not before it. */
+export function nextAfterExtras(status: CheckoutStatusResponse): WizardStep {
+  // A confirmed Pre Check-in (app/checkout/precheckin.py) already had the
+  // executive review this driver's data and documents remotely — skip
+  // both steps rather than just Documents, per the Executive Pre Check-in
+  // design's "skip Documents and Data" toggle.
+  if (status.skip_driver_data) return 'deposit';
+  return status.driver.ready_for_checkout ? 'data' : 'documents';
 }
 
 /** Best-effort starting step from the reload-safe status snapshot — same
@@ -30,16 +57,17 @@ export interface UpsellOffer {
  * offer) is simply unavailable on a fresh resume, same limitation already
  * accepted on the executive side. */
 function deriveInitialStep(status: CheckoutStatusResponse): WizardStep {
+  if (status.current_step === 'rental_details') return 'rentalDetails';
+  if (status.current_step === 'vehicle_selection') return 'vehicle';
+  // Only reachable once a vehicle is picked and extras are (at latest)
+  // in progress — driver readiness is already resolved by this point
+  // (see checkout.py's _infer_current_step), so no skip_driver_data /
+  // ready_for_checkout branch is needed here the way nextAfterExtras
+  // needs one for the live, mid-session case.
+  if (status.current_step === 'extras_and_deposit') return 'extras';
   if (status.current_step === 'document_verification') {
-    // A confirmed Pre Check-in (app/checkout/precheckin.py) already had
-    // the executive review this driver's data and documents remotely —
-    // skip both steps rather than just Documents, per the Executive Pre
-    // Check-in design's "skip Documents and Data" toggle.
-    if (status.skip_driver_data) return 'vehicle';
     return status.driver.ready_for_checkout ? 'data' : 'documents';
   }
-  if (status.current_step === 'vehicle_selection') return 'vehicle';
-  if (status.current_step === 'extras_and_deposit') return 'extras';
   if (status.current_step === 'awaiting_signature') return 'signature';
   return 'result'; // awaiting_handover | completed
 }
@@ -51,7 +79,7 @@ export function ClientShell() {
   const [stationLabel, setStationLabel] = useState('');
   const [contractId, setContractId] = useState<string | null>(null);
   const [status, setStatus] = useState<CheckoutStatusResponse | null>(null);
-  const [step, setStep] = useState<WizardStep>('documents');
+  const [step, setStep] = useState<WizardStep>('rentalDetails');
   const [candidates, setCandidates] = useState<VehicleRead[] | null>(null);
   const [upsellOffer, setUpsellOffer] = useState<UpsellOffer | null>(null);
 
@@ -129,14 +157,15 @@ export function ClientShell() {
   }
 
   const stepIndex: Record<WizardStep, number> = {
-    documents: 0,
-    data: 1,
-    vehicle: 2,
-    upsell: 2,
-    extras: 3,
-    deposit: 4,
-    signature: 5,
-    result: 5,
+    rentalDetails: 0,
+    vehicle: 1,
+    upsell: 1,
+    extras: 2,
+    documents: 3,
+    data: 4,
+    deposit: 5,
+    signature: 6,
+    result: 6,
   };
   const labels = STEP_LABELS[lang];
 
@@ -195,13 +224,14 @@ export function ClientShell() {
           starting at 'documents'), leaking local state — a scan-sent flag,
           a shortlist pick, ink on the signature pad — from one customer to
           the next. */}
-      {step === 'documents' && <DocumentsStep key={contractId} {...common} />}
-      {step === 'data' && <DataStep key={contractId} {...common} />}
+      {step === 'rentalDetails' && <RentalDetailsStep key={contractId} {...common} />}
       {step === 'vehicle' && (
         <VehicleStep key={contractId} {...common} candidates={candidates} hasUpsellOffer={!!upsellOffer} />
       )}
       {step === 'upsell' && upsellOffer && <UpsellStep key={contractId} {...common} offer={upsellOffer} />}
       {step === 'extras' && <ExtrasStep key={contractId} {...common} />}
+      {step === 'documents' && <DocumentsStep key={contractId} {...common} />}
+      {step === 'data' && <DataStep key={contractId} {...common} />}
       {step === 'deposit' && <DepositStep key={contractId} {...common} />}
       {step === 'signature' && <SignatureStep key={contractId} {...common} />}
       {step === 'result' && <ResultStep key={contractId} contractId={contractId} lang={lang} />}

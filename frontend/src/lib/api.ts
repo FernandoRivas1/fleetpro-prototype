@@ -449,6 +449,7 @@ export interface CheckoutDriverSummary {
 }
 
 export type CheckoutStep =
+  | 'rental_details'
   | 'document_verification'
   | 'vehicle_selection'
   | 'extras_and_deposit'
@@ -472,10 +473,55 @@ export interface CheckoutStatusResponse {
   deposit: DepositRead | null;
   signatures: { id: string; contract_id: string; type: 'contract' | 'handover_report'; timestamp: string }[];
   skip_driver_data: boolean;
+  rental_details_confirmed: boolean;
 }
 
 export function getCheckoutStatus(contractId: string): Promise<CheckoutStatusResponse> {
   return apiFetch(`/api/v1/checkout/${contractId}/status`);
+}
+
+// --- rental-details (app/checkout/flow.py) ----------------------------------
+// Step 1 of the wizard (Tablet Rental Details design) — see the backend
+// module's own comment for why a from_reservation contract's edits land
+// on the Reservation row while a walk-in's land on the contract itself;
+// this response always reflects the resolved, either-way values.
+
+export interface RentalDetailsResponse {
+  contract_id: string;
+  origin: 'from_reservation' | 'walk_in';
+  confirmed: boolean;
+  /** False once a vehicle has been selected — nothing here can change
+   * out from under the candidate list it was drawn from. */
+  editable: boolean;
+  reservation_code: string | null;
+  pickup_branch: BranchRead;
+  return_branch: BranchRead;
+  pickup_date: string;
+  return_date: string;
+  /** Null only for a walk-in that hasn't picked a category yet. */
+  category: ACRISSCategoryRead | null;
+}
+
+export interface RentalDetailsUpdateRequest {
+  pickup_branch_id: string;
+  return_branch_id: string;
+  pickup_date: string;
+  return_date: string;
+  acriss_category_id: string;
+}
+
+export function getRentalDetails(contractId: string): Promise<RentalDetailsResponse> {
+  return apiFetch(`/api/v1/checkout/${contractId}/rental-details`);
+}
+
+export function confirmRentalDetails(
+  contractId: string,
+  body: RentalDetailsUpdateRequest,
+): Promise<RentalDetailsResponse> {
+  return apiFetch(`/api/v1/checkout/${contractId}/rental-details`, {
+    method: 'POST',
+    body: JSON.stringify(body),
+  });
 }
 
 export interface ConfirmDocumentsRequest {

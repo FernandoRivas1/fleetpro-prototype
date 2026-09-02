@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { confirmDocuments, type CheckoutStatusResponse } from '../../lib/api';
+import { API_BASE_URL, confirmDocuments, type CheckoutStatusResponse } from '../../lib/api';
 
 const EXPIRY_WARNING_WINDOW_DAYS = 60;
 
@@ -43,6 +43,7 @@ export function DocumentsCard({
   status,
   onConfirmed,
   scannedData,
+  scannedPhotos,
 }: {
   status: CheckoutStatusResponse;
   onConfirmed: () => void;
@@ -51,6 +52,11 @@ export function DocumentsCard({
    * (still-empty) persisted driver fields, since nothing persists this
    * until confirm-documents runs below. */
   scannedData: Record<string, string | null> | null;
+  /** Same documents_scanned message's photos map (slot key -> photo_url),
+   * so the executive sees what the client actually scanned instead of a
+   * plain placeholder — same "View" zoom pattern as the Pre Check-in
+   * design's document thumbnails. */
+  scannedPhotos: Record<string, string | null> | null;
 }) {
   const { driver } = status;
   // The combined business-rule gate (documents verified AND license not
@@ -78,6 +84,19 @@ export function DocumentsCard({
   const [physicallyVerified, setPhysicallyVerified] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [viewer, setViewer] = useState<{ title: string; url: string } | null>(null);
+
+  // First non-null match wins, front side preferred — mirrors the client's
+  // own "first non-null field wins" merge in DocumentsStep.tsx.
+  const pickPhoto = (...keys: string[]): string | null => {
+    for (const k of keys) {
+      const v = scannedPhotos?.[k];
+      if (v) return v;
+    }
+    return null;
+  };
+  const idPhoto = pickPhoto('idFront', 'passport', 'idBack');
+  const licPhoto = pickPhoto('licFront', 'licBack');
 
   // Re-sync whenever a fresh status snapshot arrives, or the client's OCR
   // read comes in — scannedData wins over the (still-empty at this point)
@@ -153,7 +172,7 @@ export function DocumentsCard({
     <div className="session-card">
       <div className="session-card__head">
         <div className={`session-card__badge ${readyForCheckout ? 'session-card__badge--done' : expired ? 'session-card__badge--alarm' : 'session-card__badge--active'}`}>
-          {readyForCheckout ? '✓' : '1'}
+          {readyForCheckout ? '✓' : '3'}
         </div>
         <div className="session-card__title">Documents</div>
         <div className={`session-card__state ${readyForCheckout ? 'session-card__state--done' : expired ? 'session-card__state--alarm' : 'session-card__state--active'}`}>
@@ -182,14 +201,54 @@ export function DocumentsCard({
                 <div className="doc-slot__label">Identity document</div>
                 <div className="doc-slot__state">{fields.nationalId ? 'On file' : 'Waiting'}</div>
               </div>
-              <div className="doc-slot__thumb">{fields.nationalId ? 'ID on file' : 'Client is scanning…'}</div>
+              <div
+                className={`doc-slot__thumb ${idPhoto ? 'doc-slot__thumb--photo' : ''}`}
+                onClick={() => idPhoto && setViewer({ title: 'Identity document', url: `${API_BASE_URL}${idPhoto}` })}
+              >
+                {idPhoto ? (
+                  <>
+                    <img src={`${API_BASE_URL}${idPhoto}`} alt="Identity document" />
+                    <div className="doc-slot__view-pill">
+                      <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2.2" strokeLinecap="round">
+                        <circle cx="10.5" cy="10.5" r="6.5" />
+                        <path d="M15.5 15.5L21 21" />
+                      </svg>
+                      View
+                    </div>
+                  </>
+                ) : fields.nationalId ? (
+                  'ID on file'
+                ) : (
+                  'Client is scanning…'
+                )}
+              </div>
             </div>
             <div>
               <div className="doc-slot__label-row">
                 <div className="doc-slot__label">Driver's licence</div>
                 <div className="doc-slot__state">{fields.licenseNumber ? 'On file' : 'Waiting'}</div>
               </div>
-              <div className="doc-slot__thumb">{fields.licenseNumber ? 'Licence on file' : 'Client is scanning…'}</div>
+              <div
+                className={`doc-slot__thumb ${licPhoto ? 'doc-slot__thumb--photo' : ''}`}
+                onClick={() => licPhoto && setViewer({ title: "Driver's licence", url: `${API_BASE_URL}${licPhoto}` })}
+              >
+                {licPhoto ? (
+                  <>
+                    <img src={`${API_BASE_URL}${licPhoto}`} alt="Driver's licence" />
+                    <div className="doc-slot__view-pill">
+                      <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2.2" strokeLinecap="round">
+                        <circle cx="10.5" cy="10.5" r="6.5" />
+                        <path d="M15.5 15.5L21 21" />
+                      </svg>
+                      View
+                    </div>
+                  </>
+                ) : fields.licenseNumber ? (
+                  'Licence on file'
+                ) : (
+                  'Client is scanning…'
+                )}
+              </div>
             </div>
           </div>
 
@@ -240,6 +299,23 @@ export function DocumentsCard({
           </div>
         </div>
       </div>
+
+      {viewer && (
+        <div className="doc-lightbox" onClick={() => setViewer(null)}>
+          <div className="doc-lightbox__card" onClick={(e) => e.stopPropagation()}>
+            <div className="doc-lightbox__head">
+              <div style={{ fontSize: 16, fontWeight: 700 }}>{viewer.title}</div>
+              <div style={{ flex: 1 }} />
+              <div className="doc-lightbox__close" onClick={() => setViewer(null)}>
+                ✕
+              </div>
+            </div>
+            <div className="doc-lightbox__photo">
+              <img src={viewer.url} alt={viewer.title} />
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
