@@ -40,6 +40,27 @@ const RESYNC_ON: CheckoutMessageType[] = [
   'contract_signed',
 ];
 
+// Mirrors WizardStep from routes/client/ClientShell.tsx — kept as a plain
+// string map rather than importing across the executive/client boundary,
+// since this is purely a display nicety: card locking below still comes
+// entirely from the persisted-state `status.current_step` above. The
+// tablet fires 'step_updated' on every wizard navigation (see
+// ClientShell.tsx) — this fills the gap where several real tablet screens
+// (Extras, Documents, Data, Deposit-before-authorization) all collapse
+// into the same coarse EXTRAS_AND_DEPOSIT backend bucket and would
+// otherwise all show as "Extras" here until the next persisted milestone.
+const CLIENT_STEP_INDEX: Record<string, number> = {
+  rentalDetails: 0,
+  vehicle: 1,
+  upsell: 1,
+  extras: 2,
+  documents: 3,
+  data: 4,
+  deposit: 5,
+  signature: 6,
+  result: 6,
+};
+
 export function ActiveSessionPanel({
   contractId,
   onSessionEnd,
@@ -67,6 +88,10 @@ export function ActiveSessionPanel({
   // actually see what the client scanned instead of a plain placeholder,
   // same as scannedData above: never persisted, gone on reload.
   const [scannedPhotos, setScannedPhotos] = useState<Record<string, string | null> | null>(null);
+  // Set from 'step_updated' broadcasts — see CLIENT_STEP_INDEX above. Never
+  // persisted, so a reload falls back to the coarser status.current_step
+  // alone, same limitation already accepted for candidatesSent etc.
+  const [liveStepIndex, setLiveStepIndex] = useState<number | null>(null);
   const [resetOpen, setResetOpen] = useState(false);
   const [resetting, setResetting] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
@@ -82,6 +107,7 @@ export function ActiveSessionPanel({
     setStatus(null);
     setScannedData(null);
     setScannedPhotos(null);
+    setLiveStepIndex(null);
     refresh();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [contractId]);
@@ -93,6 +119,10 @@ export function ActiveSessionPanel({
       if (message.type === 'documents_scanned') {
         setScannedData((message.payload.ocr as Record<string, string | null>) ?? null);
         setScannedPhotos((message.payload.photos as Record<string, string | null>) ?? null);
+      }
+      if (message.type === 'step_updated') {
+        const idx = CLIENT_STEP_INDEX[message.payload.step as string];
+        if (idx !== undefined) setLiveStepIndex(idx);
       }
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -120,7 +150,10 @@ export function ActiveSessionPanel({
   if (error) return <div className="centered-empty">{error}</div>;
   if (!status) return <div className="centered-empty">Loading…</div>;
 
-  const stepIdx = STEP_INDEX[status.current_step];
+  // Max, not a straight override: never lets a stale live broadcast (e.g.
+  // one that arrived before a page reload) show LESS progress than what
+  // the persisted state already confirms.
+  const stepIdx = Math.max(STEP_INDEX[status.current_step], liveStepIndex ?? 0);
   const contractLabel = `CT-${contractId.slice(0, 8).toUpperCase()}`;
   const linked = pairing.status === 'open';
 

@@ -152,6 +152,21 @@ export function ClientShell() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [pairing, contractId]);
 
+  // Live, granular broadcast of exactly which screen is showing — the
+  // executive's ActiveSessionPanel otherwise only learns of progress at a
+  // handful of persisted-state milestones (vehicle picked, deposit
+  // authorized, ...), which collapses several real tablet screens (Extras,
+  // Documents, Data, Deposit-before-authorization) into one identical
+  // "Extras" label until the next milestone fires. Fires on every `step`
+  // change regardless of source (goTo, the documents-confirmed handler's
+  // setStep, or the initial deriveInitialStep resume) since they all funnel
+  // through this one state slot.
+  useEffect(() => {
+    if (!contractId) return;
+    pairing.send('step_updated', { step });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [step, contractId]);
+
   if (!contractId || !status) {
     return <IdleScreen stationLabel={stationLabel} />;
   }
