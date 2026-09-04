@@ -49,6 +49,12 @@ class ReservationRead(BaseModel):
     acriss_category_id: uuid.UUID
     deposit_done_online: bool
     status: ReservationStatus
+    # Not a Reservation column — Reservation stores driver identity inline
+    # (no driver_id FK, see models.py), so this is populated by a
+    # separate lookup-by-email in the endpoints that return this schema
+    # (reservations.py, precheckin.py), null if no Driver row exists yet
+    # for this email (Executive Main design's tier chip on each row).
+    driver_tier: CustomerTier | None = None
 
 
 class ReservationExtraRead(BaseModel):

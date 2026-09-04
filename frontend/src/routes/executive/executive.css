@@ -506,6 +506,32 @@
   gap: 14px;
 }
 
+.res-table__row--search {
+  grid-template-columns: 90px 1.5fr 0.85fr 0.85fr 1.15fr 1.2fr 160px;
+}
+
+.res-table__code {
+  font-size: 13px;
+  color: var(--fp-text-muted);
+}
+
+.res-table__data-cta {
+  margin-top: 2px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--fp-accent);
+  background: none;
+  border: none;
+  padding: 0;
+  cursor: pointer;
+  font-family: inherit;
+}
+
+.res-table__data-cta:disabled {
+  color: var(--fp-text-muted);
+  cursor: default;
+}
+
 .res-table__head {
   flex: none;
   padding: 0 20px;

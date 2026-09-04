@@ -152,6 +152,8 @@ export interface ReservationRead {
   acriss_category_id: string;
   deposit_done_online: boolean;
   status: 'pending' | 'confirmed' | 'cancelled' | 'completed' | 'no_show';
+  /** null if no Driver row exists yet for this email — see schemas.py. */
+  driver_tier: CustomerTier | null;
 }
 
 export function listReservations(branchId: string): Promise<ReservationRead[]> {

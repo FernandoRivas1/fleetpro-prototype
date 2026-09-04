@@ -34,7 +34,7 @@ from app.checkout.documents import (
     _save_image,
 )
 from app.checkout.models import Reservation, ReservationPrecheckin
-from app.checkout.reservations import STARTABLE_STATUSES
+from app.checkout.reservations import STARTABLE_STATUSES, _with_driver_tiers
 from app.checkout.schemas import ReservationRead
 from app.config import settings
 from app.database import get_db
@@ -274,12 +274,13 @@ def list_precheckin_queue(
         query = query.filter(Reservation.pickup_date <= cutoff)
 
     reservations = query.order_by(Reservation.pickup_date.asc()).all()
+    reservation_reads = _with_driver_tiers(db, reservations)
     return [
         PrecheckinQueueItem(
-            reservation=ReservationRead.model_validate(r),
+            reservation=reservation_read,
             precheckin=PrecheckinRead.model_validate(r.precheckin) if r.precheckin else None,
         )
-        for r in reservations
+        for r, reservation_read in zip(reservations, reservation_reads)
     ]
 
 
