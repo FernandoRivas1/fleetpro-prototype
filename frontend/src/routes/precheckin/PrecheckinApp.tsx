@@ -111,8 +111,8 @@ export function PrecheckinApp() {
     <div className="report-page">
       <div className="report-container">
         <div className="report-header">
-          <div className="report-header__mark">F</div>
-          <div className="report-header__title">Fleetpro pre check-in</div>
+          <div className="report-header__mark">RS</div>
+          <div className="report-header__title">Rental Software pre check-in</div>
         </div>
 
         {!reservation && (
@@ -120,7 +120,7 @@ export function PrecheckinApp() {
             <h2>Find your reservation</h2>
             <div className="rp-field">
               <label htmlFor="pc-code">Reservation number</label>
-              <input id="pc-code" type="text" value={code} onChange={(e) => setCode(e.target.value)} placeholder="FP-XXXXX" />
+              <input id="pc-code" type="text" value={code} onChange={(e) => setCode(e.target.value)} placeholder="RS-XXXXX" />
             </div>
             <div className="rp-field">
               <label htmlFor="pc-lastname">Last name</label>

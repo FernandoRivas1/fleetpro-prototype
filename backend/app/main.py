@@ -22,7 +22,7 @@ from app.reports.pre_handover import router as pre_handover_router
 from app.shared.branches import router as branches_router
 from app.shared.extras import router as extras_router
 
-app = FastAPI(title="Fleetpro API", version="0.1.0")
+app = FastAPI(title="Rental Software API", version="0.1.0")
 
 app.add_middleware(
     CORSMiddleware,

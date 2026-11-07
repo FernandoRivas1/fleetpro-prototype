@@ -181,7 +181,7 @@ async def start_checkout(payload: CheckoutStartRequest, db: Session = Depends(ge
             id=uuid.uuid4(),
             first_name=first_name,
             last_name=last_name,
-            email=email or f"guest-{uuid.uuid4().hex[:10]}@walkin.fleetpro.local",
+            email=email or f"guest-{uuid.uuid4().hex[:10]}@walkin.rental-software.local",
             documents_verified=False,
         )
         db.add(driver)

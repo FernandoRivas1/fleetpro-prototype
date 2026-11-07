@@ -4,7 +4,7 @@ import { Link } from 'react-router-dom';
 export function Home() {
   return (
     <div className="debug-panel">
-      <h1>Fleetpro</h1>
+      <h1>Rental Software</h1>
       <p className="debug-panel__hint">Dev links:</p>
       <div className="debug-panel__actions">
         <Link to="/executive">

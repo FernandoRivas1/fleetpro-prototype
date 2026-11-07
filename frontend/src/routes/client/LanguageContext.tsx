@@ -1,7 +1,7 @@
 import { createContext, useContext, useState, type ReactNode } from 'react';
 import type { Lang } from './strings';
 
-const STORAGE_KEY = 'fleetpro:language';
+const STORAGE_KEY = 'rental-software:language';
 
 const LanguageCtx = createContext<{ lang: Lang; setLang: (lang: Lang) => void } | null>(null);
 

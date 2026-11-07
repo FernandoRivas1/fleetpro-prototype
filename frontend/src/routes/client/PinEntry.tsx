@@ -36,8 +36,8 @@ export function PinEntry() {
   return (
     <div className="pin-page">
       <div className="pin-page__brand">
-        <div className="pin-page__mark">F</div>
-        <div className="pin-page__brand-text">Fleetpro</div>
+        <div className="pin-page__mark">RS</div>
+        <div className="pin-page__brand-text">Rental Software</div>
       </div>
       <div className="pin-page__badge">TABLET NOT PAIRED</div>
 

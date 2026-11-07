@@ -1,6 +1,6 @@
 """Cross-domain entities.
 
-Branch and Extra aren't listed as their own bullet in the Fleetpro data
+Branch and Extra aren't listed as their own bullet in the Rental Software data
 model (section 3 of CLAUDE.md), but both Vehicle/Reservation/Station/
 RentalContract (branch_id) and ReservationExtra/ContractExtra (extra_id)
 reference them as catalogs, so they live here rather than inside a single

@@ -70,7 +70,7 @@ export const documentsStrings = {
     typePassport: 'Passport',
     licNote: 'Both sides, please',
     consentPre:
-      'I authorise Fleetpro to process my documents and personal data for this rental, as described in the ',
+      'I authorise Rental Software to process my documents and personal data for this rental, as described in the ',
     consentPost: '.',
     policyTitle: 'Personal Data Policy',
     policyVersion: 'Version 4.2 · updated 2 Jun 2026',
@@ -116,7 +116,7 @@ export const documentsStrings = {
       ],
       [
         'Your rights',
-        'You may request access, correction, or deletion once the retention period ends by writing to privacy@fleetpro.cl.',
+        'You may request access, correction, or deletion once the retention period ends by writing to privacy@rental-software.example.',
       ],
     ],
   },
@@ -130,7 +130,7 @@ export const documentsStrings = {
     typeId: 'Cédula',
     typePassport: 'Pasaporte',
     licNote: 'Ambos lados, por favor',
-    consentPre: 'Autorizo a Fleetpro a tratar mis documentos y datos personales para este arriendo, según lo descrito en la ',
+    consentPre: 'Autorizo a Rental Software a tratar mis documentos y datos personales para este arriendo, según lo descrito en la ',
     consentPost: '.',
     policyTitle: 'Política de Datos Personales',
     policyVersion: 'Versión 4.2 · actualizada el 2 jun 2026',
@@ -162,7 +162,7 @@ export const documentsStrings = {
       ['Para qué lo necesitamos', 'Para verificar que está legalmente habilitado para conducir el vehículo, emitir el contrato de arriendo y cumplir con nuestras obligaciones ante las autoridades.'],
       ['Cuánto tiempo lo guardamos', 'Las imágenes se conservan durante el arriendo más el plazo legal de cinco años.'],
       ['Quién puede verlo', 'El personal del mesón, nuestro equipo de prevención de fraude y las autoridades cuando la ley lo exige.'],
-      ['Sus derechos', 'Puede solicitar acceso, corrección o eliminación una vez terminado el plazo, escribiendo a privacy@fleetpro.cl.'],
+      ['Sus derechos', 'Puede solicitar acceso, corrección o eliminación una vez terminado el plazo, escribiendo a privacy@rental-software.example.'],
     ],
   },
 };

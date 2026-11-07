@@ -111,10 +111,10 @@ class Reservation(Base, TimestampMixin):
     @property
     def code(self) -> str:
         """Human-friendly reservation code (Executive Pre Check-in design's
-        "FP-xxxxx") — derived from the id rather than a separate column,
+        "RS-xxxxx") — derived from the id rather than a separate column,
         and what the driver types into the pre-check-in portal alongside
         their last name (see app/checkout/precheckin.py)."""
-        return f"FP-{self.id.hex[:5].upper()}"
+        return f"RS-{self.id.hex[:5].upper()}"
 
 
 class ReservationPrecheckin(Base, TimestampMixin):
