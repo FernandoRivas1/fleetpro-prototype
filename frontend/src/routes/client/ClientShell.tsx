@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useStationPairing } from '../../pairing/StationPairingContext';
-import { getCheckoutStatus, getStation, listBranches, type CheckoutStatusResponse, type VehicleRead, type ACRISSCategoryRead } from '../../lib/api';
+import { getCheckoutStatus, getStation, listBranches, type CheckoutStatusResponse, type VehicleShortlist } from '../../lib/api';
 import { IdleScreen } from './IdleScreen';
 import { useLanguage } from './LanguageContext';
 import { STEP_LABELS } from './strings';
@@ -8,7 +8,6 @@ import { RentalDetailsStep } from './RentalDetailsStep';
 import { DocumentsStep } from './DocumentsStep';
 import { DataStep } from './DataStep';
 import { VehicleStep } from './VehicleStep';
-import { UpsellStep } from './UpsellStep';
 import { ExtrasStep } from './ExtrasStep';
 import { DepositStep } from './DepositStep';
 import { SignatureStep } from './SignatureStep';
@@ -16,25 +15,17 @@ import { ResultStep } from './ResultStep';
 import './client.css';
 
 // Order per the Tablet *.dc.html designs: Rental details -> Vehicle ->
-// Extras -> Documents -> Data -> Deposit -> Signature. 'upsell' has no
-// step-bar entry of its own — see STEP_LABELS/strings.ts — it's a
-// sub-screen inside 'vehicle'.
+// Extras -> Documents -> Data -> Deposit -> Signature. Upgrades are
+// offered inside 'vehicle', alongside the booked category's cars.
 export type WizardStep =
   | 'rentalDetails'
   | 'vehicle'
-  | 'upsell'
   | 'extras'
   | 'documents'
   | 'data'
   | 'deposit'
   | 'signature'
   | 'result';
-
-export interface UpsellOffer {
-  category: ACRISSCategoryRead;
-  vehicle: VehicleRead;
-  daily_price_difference: number;
-}
 
 /** Where the wizard continues once Extras is confirmed — shared between
  * the reload-resume derivation below and ExtrasStep's own forward
@@ -53,8 +44,8 @@ export function nextAfterExtras(status: CheckoutStatusResponse): WizardStep {
  * coarse-mapping idea stage 2's ActiveSessionPanel uses, plus the
  * documents_verified/license shortcut the handoff calls out explicitly
  * ("skip straight to a short summary if the driver already has valid
- * documents on file"). Transient WS-only state (candidates, an upsell
- * offer) is simply unavailable on a fresh resume, same limitation already
+ * documents on file"). Transient WS-only state (the vehicle
+ * shortlist) is simply unavailable on a fresh resume, same limitation already
  * accepted on the executive side. */
 function deriveInitialStep(status: CheckoutStatusResponse): WizardStep {
   if (status.current_step === 'rental_details') return 'rentalDetails';
@@ -80,8 +71,7 @@ export function ClientShell() {
   const [contractId, setContractId] = useState<string | null>(null);
   const [status, setStatus] = useState<CheckoutStatusResponse | null>(null);
   const [step, setStep] = useState<WizardStep>('rentalDetails');
-  const [candidates, setCandidates] = useState<VehicleRead[] | null>(null);
-  const [upsellOffer, setUpsellOffer] = useState<UpsellOffer | null>(null);
+  const [shortlist, setShortlist] = useState<VehicleShortlist | null>(null);
 
   // Resolve station label + any already-active contract (reload resume).
   useEffect(() => {
@@ -119,16 +109,12 @@ export function ClientShell() {
       switch (message.type) {
         case 'contract_started': {
           const id = message.payload.contract_id as string;
-          setCandidates(null);
-          setUpsellOffer(null);
+          setShortlist(null);
           setContractId(id);
           break;
         }
         case 'candidates_sent':
-          setCandidates(message.payload.vehicles as VehicleRead[]);
-          break;
-        case 'upsell_offered':
-          setUpsellOffer(message.payload as unknown as UpsellOffer);
+          setShortlist(message.payload as unknown as VehicleShortlist);
           break;
         case 'documents_confirmed_by_executive':
           if (contractId) {
@@ -141,8 +127,7 @@ export function ClientShell() {
           // The executive abandoned this session (Executive Session Panel
           // design's "Reset session") — nothing to confirm here, just
           // return to idle same as a fresh, unstarted tablet.
-          setCandidates(null);
-          setUpsellOffer(null);
+          setShortlist(null);
           setContractId(null);
           break;
         default:
@@ -174,7 +159,6 @@ export function ClientShell() {
   const stepIndex: Record<WizardStep, number> = {
     rentalDetails: 0,
     vehicle: 1,
-    upsell: 1,
     extras: 2,
     documents: 3,
     data: 4,
@@ -240,10 +224,7 @@ export function ClientShell() {
           a shortlist pick, ink on the signature pad — from one customer to
           the next. */}
       {step === 'rentalDetails' && <RentalDetailsStep key={contractId} {...common} />}
-      {step === 'vehicle' && (
-        <VehicleStep key={contractId} {...common} candidates={candidates} hasUpsellOffer={!!upsellOffer} />
-      )}
-      {step === 'upsell' && upsellOffer && <UpsellStep key={contractId} {...common} offer={upsellOffer} />}
+      {step === 'vehicle' && <VehicleStep key={contractId} {...common} shortlist={shortlist} />}
       {step === 'extras' && <ExtrasStep key={contractId} {...common} />}
       {step === 'documents' && <DocumentsStep key={contractId} {...common} />}
       {step === 'data' && <DataStep key={contractId} {...common} />}

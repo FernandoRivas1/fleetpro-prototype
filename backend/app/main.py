@@ -28,7 +28,16 @@ from app.shared.extras import router as extras_router
 async def lifespan(_: FastAPI) -> AsyncIterator[None]:
     if settings.demo_reseed_on_startup:
         import seed  # backend/seed.py, importable because the server runs from backend/
+        from alembic import command
+        from alembic.config import Config
 
+        # The seed writes every current column, so bring the schema up to
+        # date first: a deploy that adds a migration then needs no manual
+        # step on the demo database. No alembic.ini here on purpose — its
+        # logging section would replace uvicorn's log handlers.
+        alembic_config = Config()
+        alembic_config.set_main_option("script_location", str(Path(__file__).resolve().parents[1] / "alembic"))
+        command.upgrade(alembic_config, "head")
         seed.run()
     yield
 

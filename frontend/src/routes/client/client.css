@@ -92,7 +92,7 @@
 
 .client-nav__grid {
   display: grid;
-  grid-template-columns: repeat(6, 1fr);
+  grid-template-columns: repeat(7, 1fr);
   gap: 10px;
 }
 
@@ -728,71 +728,126 @@
   border: none;
 }
 
-/* ---- Upselling --------------------------------------------------------- */
+/* ---- Vehicle options: pre-assigned, same category, upgrades ---------- */
 
-.upsell-columns {
-  flex: none;
-  display: grid;
-  grid-template-columns: 1fr 150px 1fr;
-  align-items: stretch;
-}
+.car-grid--n1 { grid-template-columns: minmax(0, 420px); }
+.car-grid--n2 { grid-template-columns: repeat(2, minmax(0, 420px)); }
+.car-grid--n4 { grid-template-columns: repeat(4, 1fr); gap: 18px; }
+.car-grid--n4 .car-card__photo { height: 150px; }
+.car-grid--n4 .car-card__body { padding: 18px; gap: 12px; }
+.car-grid--n4 .car-card__model { font-size: 21px; }
 
-.upsell-col {
-  border: 2px solid var(--fp-border);
-  border-radius: 18px;
-  padding: 22px 26px;
-  display: flex;
-  flex-direction: column;
-  gap: 14px;
-  background: #fff;
-}
-
-.upsell-col--offer {
-  border-color: #e2d9fb;
-  background: #fff;
-}
-
-.upsell-col__photo {
-  height: 170px;
-  border-radius: 12px;
-  background-size: cover;
-  background-position: center;
-  background-color: var(--fp-surface-muted);
-}
-
-.upsell-col__title {
-  font-size: 22px;
+.car-card__ribbon {
+  position: absolute;
+  top: 14px;
+  left: 14px;
+  z-index: 2;
+  font-size: 13px;
   font-weight: 700;
-  letter-spacing: -0.02em;
-}
-
-.upsell-row {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 10px 0;
-  border-bottom: 1px solid #eaedf0;
-  font-size: 16px;
-}
-
-.upsell-halo {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-}
-
-.upsell-halo__circle {
-  width: 130px;
-  height: 130px;
-  border-radius: 50%;
-  background: var(--fp-accent);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
   color: #fff;
-  display: flex;
-  flex-direction: column;
+  background: var(--fp-primary);
+  border-radius: 999px;
+  padding: 6px 12px;
+}
+
+.car-card__ribbon--upgrade {
+  background: linear-gradient(135deg, #6538e5, #8f6cf0);
+  box-shadow: 0 4px 14px rgba(101, 56, 229, 0.35);
+}
+
+.car-card--upgrade {
+  border-color: #d9cdfa;
+  background: linear-gradient(180deg, #fbf9ff 0%, #ffffff 60%);
+}
+
+.car-card__prep {
+  position: absolute;
+  bottom: 12px;
+  right: 12px;
+  display: inline-flex;
   align-items: center;
-  justify-content: center;
-  gap: 2px;
+  gap: 7px;
+  font-size: 13px;
+  font-weight: 600;
+  border-radius: 999px;
+  padding: 5px 11px;
+  background: #fff;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+}
+
+.car-card__prep::before {
+  content: '';
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: currentColor;
+}
+
+.car-card__prep--ready { color: var(--fp-success); }
+.car-card__prep--inprep { color: var(--fp-warning); }
+
+.car-card__photo-wrap {
+  position: relative;
+  flex: none;
+}
+
+.car-card__category {
+  font-size: 15px;
+  color: var(--fp-secondary);
+  margin-top: -8px;
+}
+
+.car-card__tag--gain {
+  color: var(--fp-accent);
+  border-color: #d9cdfa;
+  background: #f5f1ff;
+  font-weight: 600;
+}
+
+.car-card__match {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 14px;
+  color: var(--fp-secondary);
+}
+
+.car-card__match-track {
+  flex: 1;
+  height: 6px;
+  border-radius: 3px;
+  background: var(--fp-surface-muted);
+  overflow: hidden;
+}
+
+.car-card__match-fill {
+  height: 6px;
+  border-radius: 3px;
+  background: var(--fp-status-available);
+}
+
+.car-card__price {
+  font-size: 15px;
+  color: var(--fp-secondary);
+}
+
+.car-card__price-big {
+  font-family: var(--fp-font-mono);
+  font-size: 26px;
+  font-weight: 600;
+  color: var(--fp-accent);
+}
+
+.car-card__price-big small {
+  font-family: var(--fp-font-sans);
+  font-size: 15px;
+  font-weight: 500;
+}
+
+.car-card--upgrade .car-card__btn {
+  border-color: var(--fp-accent);
 }
 
 /* ---- Extras + Deposit --------------------------------------------------- */

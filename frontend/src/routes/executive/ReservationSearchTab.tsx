@@ -253,6 +253,7 @@ export function ReservationSearchTab({
                 <div>
                   {cat && <span className="res-table__acriss">{cat.code}</span>}
                   <span className="res-table__sub">{cat?.name ?? ''}</span>
+                  {r.assigned_vehicle_id && <div className="res-table__preassigned">Car pre-assigned</div>}
                 </div>
                 <div className="precheckin__status">
                   <div className={`precheckin__dot precheckin__dot--${st}`} />

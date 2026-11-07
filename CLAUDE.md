@@ -24,9 +24,11 @@ the client.
 
 ## Client check-out wizard order
 Rental details → Vehicle → Extras → Documents → Data → Deposit → Signature.
-Upselling has no step of its own — it's a sub-screen inside Vehicle, shown
-right after a vehicle is picked. A confirmed Pre Check-in (see below) skips
-straight from Extras to Deposit, omitting both Documents and Data.
+Upselling has no step of its own — upgrade options are shown in the same
+Vehicle screen as the booked category's cars (after the reservation's
+pre-assigned car, if it has one), each with its extra daily rate. A
+confirmed Pre Check-in (see below) skips straight from Extras to Deposit,
+omitting both Documents and Data.
 
 ## Pairing model
 The executive computer and the client tablet are paired ONCE per counter
@@ -62,6 +64,9 @@ Reservation  (seeded with sample data; its creation flow is out of scope)
   id, driver_first_name, driver_last_name, driver_email
   pickup_date, return_date, pickup_branch_id, return_branch_id,
     acriss_category_id
+  assigned_vehicle_id (nullable) — a car pre-assigned to this booking;
+    shown first and pre-selected, but the client can still be offered
+    others. Held for this reservation while it's open.
   deposit_done_online (bool)
   status
 
@@ -148,7 +153,11 @@ A tier is never a shortcut past the license/documents-verified gate below.
   without the deposit in "authorized" status. A Gold-tier driver's deposit
   is waived (authorized automatically at $0); a Silver-tier driver's is
   half price ($250,000). See "Customer loyalty tiers" above.
-- The upsell can never be an equal or lower category than the original.
+- The upsell can never be an equal or lower category than the original:
+  select-vehicle rejects any car below the booked category.
+- A car pre-assigned to an open reservation, or chosen in another unsigned
+  checkout, can't be selected by anyone else. Cars in preparation (InPrep)
+  can be offered and chosen; they keep InPrep until the contract is signed.
 - A vehicle can't be selected until the client has confirmed the Rental
   Details step (branch, dates, category) for this contract.
 

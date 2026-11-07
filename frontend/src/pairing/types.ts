@@ -9,8 +9,6 @@ export type CheckoutMessageType =
   | 'driver_data_confirmed'
   | 'candidates_sent'
   | 'vehicle_selected'
-  | 'upsell_offered'
-  | 'upsell_responded'
   | 'extras_confirmed'
   | 'deposit_authorized'
   | 'contract_signed'

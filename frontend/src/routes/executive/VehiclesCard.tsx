@@ -1,12 +1,30 @@
 import { useEffect, useState } from 'react';
 import { useStationPairing } from '../../pairing/StationPairingContext';
-import { getCandidates, type CandidateVehicle, type CheckoutStatusResponse } from '../../lib/api';
+import {
+  getVehicleOptions,
+  type CheckoutStatusResponse,
+  type VehicleOption,
+  type VehicleOptionKind,
+  type VehicleOptionsResponse,
+  type VehicleShortlist,
+} from '../../lib/api';
 
-const MAX_SHORTLIST = 3;
+// Room for the pre-assigned car, a couple of alternatives and an upgrade.
+const MAX_SHORTLIST = 4;
 
-function scoreColor(score: number): string {
-  if (score >= 85) return 'var(--fp-status-available)';
-  if (score >= 70) return 'var(--fp-status-inprep)';
+const SECTION_TITLES: Record<VehicleOptionKind, string> = {
+  pre_assigned: 'Pre-assigned to this reservation',
+  same_category: 'Reserved category',
+  upgrade: 'Upselling options',
+};
+
+function clp(n: number): string {
+  return `$${n.toLocaleString('de-DE')}`;
+}
+
+function matchColor(pct: number): string {
+  if (pct >= 90) return 'var(--fp-status-available)';
+  if (pct >= 75) return 'var(--fp-status-inprep)';
   return 'var(--fp-secondary)';
 }
 
@@ -18,33 +36,44 @@ export function VehiclesCard({
   onSent: () => void;
 }) {
   const pairing = useStationPairing();
-  // Vehicle selection no longer waits on document verification (that gate
-  // moved to deposit-authorize/sign — see CLAUDE.md's "Critical business
-  // rules" and flow.py) now that Vehicle comes before Documents in the
-  // wizard (Tablet Rental Details design). It only waits on the Rental
-  // Details step being confirmed — select-vehicle enforces this same
-  // rule server-side (409 otherwise), this is just the matching UI gate.
+  // Only waits on the Rental Details step being confirmed — select-vehicle
+  // and vehicle-options enforce this same rule server-side (409
+  // otherwise), this is just the matching UI gate.
   const locked = !status.rental_details_confirmed;
+  const chosenId = status.vehicle?.id ?? null;
 
-  // Both origins now have a category by the time this card is reachable:
-  // a reservation's own, or a walk-in's own choice from the Rental
-  // Details step (Tablet Rental Details design) — see checkout.py's
-  // _current_category. No inline picker needed here any more.
-  const categoryId = status.current_category?.id ?? null;
-  const [candidates, setCandidates] = useState<CandidateVehicle[] | null>(null);
-  const [picks, setPicks] = useState<Set<string>>(new Set());
+  const [data, setData] = useState<VehicleOptionsResponse | null>(null);
+  // null until the first load, which pre-picks the pre-assigned car.
+  const [picks, setPicks] = useState<Set<string> | null>(null);
   const [sent, setSent] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  useEffect(() => {
-    if (locked || !categoryId) return;
-    setCandidates(null);
-    setPicks(new Set());
+  // A new customer starts a fresh shortlist.
+  const categoryId = status.current_category?.id ?? null;
+  const [seenContractId, setSeenContractId] = useState(status.contract_id);
+  if (status.contract_id !== seenContractId) {
+    setSeenContractId(status.contract_id);
+    setData(null);
+    setPicks(null);
     setSent(false);
-    getCandidates(categoryId, status.branch_id, status.driver.id)
-      .then((res) => setCandidates(res.candidates))
+    setError(null);
+  }
+
+  // Also refetched when the client picks a car, so the list reflects it
+  // (the chosen car stays listed, everything else re-ranks).
+  useEffect(() => {
+    if (locked) return;
+    getVehicleOptions(status.contract_id)
+      .then((res) => {
+        setData(res);
+        setPicks(
+          (prev) => prev ?? new Set(res.options.filter((o) => o.kind === 'pre_assigned').map((o) => o.vehicle.id)),
+        );
+      })
       .catch((err) => setError(err instanceof Error ? err.message : String(err)));
-  }, [locked, categoryId, status.branch_id, status.driver.id]);
+  }, [locked, status.contract_id, status.branch_id, categoryId, chosenId]);
+
+  const picked = picks ?? new Set<string>();
 
   const togglePick = (vehicleId: string) => {
     setSent(false);
@@ -57,28 +86,46 @@ export function VehiclesCard({
   };
 
   const send = () => {
-    if (!candidates || picks.size === 0) return;
-    const vehicles = candidates.filter((c) => picks.has(c.vehicle.id)).map((c) => c.vehicle);
-    pairing.send('candidates_sent', { contract_id: status.contract_id, vehicles });
+    if (!data || picked.size === 0) return;
+    const payload: VehicleShortlist = {
+      contract_id: status.contract_id,
+      reserved_category: data.reserved_category,
+      rental_days: data.rental_days,
+      options: data.options.filter((o) => picked.has(o.vehicle.id)),
+    };
+    pairing.send('candidates_sent', payload as unknown as Record<string, unknown>);
     setSent(true);
     onSent();
   };
 
+  const chosen = data?.options.find((o) => o.vehicle.id === chosenId) ?? null;
+  const sections = (['pre_assigned', 'same_category', 'upgrade'] as const)
+    .map((kind) => ({ kind, options: data?.options.filter((o) => o.kind === kind) ?? [] }))
+    .filter((s) => s.options.length > 0);
+
   return (
     <div className={`session-card ${locked ? 'session-card--locked' : ''}`}>
       <div className="session-card__head">
-        <div className={`session-card__badge ${!locked ? (sent ? 'session-card__badge--done' : 'session-card__badge--active') : ''}`}>
+        <div className={`session-card__badge ${!locked ? (sent || chosen ? 'session-card__badge--done' : 'session-card__badge--active') : ''}`}>
           1
         </div>
         <div className="session-card__title">Candidate Vehicles</div>
-        <div className={`session-card__state ${sent ? 'session-card__state--done' : ''}`}>
-          {locked ? 'Locked' : sent ? 'Sent to tablet' : `Shortlist up to ${MAX_SHORTLIST}`}
+        <div className={`session-card__state ${sent || chosen ? 'session-card__state--done' : ''}`}>
+          {locked
+            ? 'Locked'
+            : chosen
+              ? `Client chose the ${chosen.vehicle.make} ${chosen.vehicle.model}${chosen.kind === 'upgrade' ? ' (upgrade)' : ''}`
+              : sent
+                ? 'Sent to tablet'
+                : `Shortlist up to ${MAX_SHORTLIST}`}
         </div>
         <div className="session-card__spacer" />
-        {!locked && candidates && (
+        {!locked && data && (
           <>
-            <div className="locked-hint">{picks.size} of {MAX_SHORTLIST} selected</div>
-            <button type="button" className="btn btn--sm" disabled={picks.size === 0} onClick={send}>
+            <div className="locked-hint">
+              {picked.size} of {MAX_SHORTLIST} selected
+            </div>
+            <button type="button" className="btn btn--sm" disabled={picked.size === 0} onClick={send}>
               {sent ? 'Options on tablet ✓' : 'Send options to client'}
             </button>
           </>
@@ -87,59 +134,129 @@ export function VehiclesCard({
 
       {!locked && (
         <div className="session-card__body">
-          {!categoryId && (
-            <div className="locked-hint">Waiting for the client to confirm rental details (branch, dates, category).</div>
-          )}
-
           {error && <div className="field__error">{error}</div>}
-          {categoryId && candidates === null && !error && <div className="locked-hint">Loading candidates…</div>}
-          {categoryId && candidates?.length === 0 && (
-            <div className="locked-hint">No available vehicles in this category at this branch right now.</div>
+          {!data && !error && <div className="locked-hint">Loading candidates…</div>}
+
+          {data && (
+            <div className="vehicle-summary">
+              Booked <span className="res-table__acriss">{data.reserved_category.code}</span>
+              {data.reserved_category.name} · {clp(data.reserved_category.base_daily_rate)}/day · {data.rental_days}{' '}
+              {data.rental_days === 1 ? 'day' : 'days'}
+            </div>
+          )}
+          {data && data.options.length === 0 && (
+            <div className="locked-hint">No vehicles in this category or above at this branch right now.</div>
           )}
 
-          {candidates?.map((c) => {
-            const picked = picks.has(c.vehicle.id);
-            return (
-              <div
-                key={c.vehicle.id}
-                className={`vehicle-row ${picked ? 'vehicle-row--picked' : ''}`}
-                onClick={() => togglePick(c.vehicle.id)}
-              >
-                <div className={`vehicle-row__box ${picked ? 'vehicle-row__box--picked' : ''}`}>{picked ? '✓' : ''}</div>
-                <div
-                  className="vehicle-row__photo"
-                  style={c.vehicle.main_photo_url ? { backgroundImage: `url(${c.vehicle.main_photo_url})` } : undefined}
-                />
-                <div>
-                  <div className="vehicle-row__model">
-                    {c.vehicle.make} {c.vehicle.model}
-                  </div>
-                  <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginTop: 3 }}>
-                    <span className="vehicle-row__plate">{c.vehicle.plate}</span>
-                    <span className="vehicle-row__sub">{c.vehicle.year}</span>
-                  </div>
-                </div>
-                <div>
-                  <div>{c.vehicle.current_km.toLocaleString('de-DE')} km</div>
-                  <div className="vehicle-row__sub">current mileage</div>
-                </div>
-                <div>
-                  <div>{Math.max(c.vehicle.next_service_km - c.vehicle.current_km, 0).toLocaleString('de-DE')} km</div>
-                  <div className="vehicle-row__sub">to next service</div>
-                </div>
-                <div className="score-bar">
-                  <div className="score-bar__track">
-                    <div className="score-bar__fill" style={{ width: `${c.score}%`, background: scoreColor(c.score) }} />
-                  </div>
-                  <div className="score-bar__value" style={{ color: scoreColor(c.score) }}>
-                    {c.score}
-                  </div>
-                </div>
+          {sections.map(({ kind, options }) => (
+            <div key={kind} className="vehicle-section">
+              <div className={`vehicle-section__title ${kind === 'upgrade' ? 'vehicle-section__title--upgrade' : ''}`}>
+                {SECTION_TITLES[kind]}
+                {kind === 'same_category' && data && ` · ${data.reserved_category.code} ${data.reserved_category.name}`}
               </div>
-            );
-          })}
+              {options.map((o) => (
+                <VehicleRow
+                  key={o.vehicle.id}
+                  option={o}
+                  rentalDays={data?.rental_days ?? 1}
+                  picked={picked.has(o.vehicle.id)}
+                  chosenByClient={o.vehicle.id === chosenId}
+                  onToggle={() => togglePick(o.vehicle.id)}
+                />
+              ))}
+            </div>
+          ))}
         </div>
       )}
+    </div>
+  );
+}
+
+function VehicleRow({
+  option: o,
+  rentalDays,
+  picked,
+  chosenByClient,
+  onToggle,
+}: {
+  option: VehicleOption;
+  rentalDays: number;
+  picked: boolean;
+  chosenByClient: boolean;
+  onToggle: () => void;
+}) {
+  const f = o.category.features;
+  const toService = Math.max(o.vehicle.next_service_km - o.vehicle.current_km, 0);
+  const b = o.score_breakdown;
+  const why = [
+    `Transmission ${b.transmission_match}`,
+    `Low mileage ${b.low_mileage}`,
+    `Service headroom ${b.service_headroom}`,
+    `Damage ${b.damage_penalty}`,
+  ].join(' · ');
+
+  return (
+    <div
+      className={`vehicle-row ${picked ? 'vehicle-row--picked' : ''} ${o.kind === 'upgrade' ? 'vehicle-row--upgrade' : ''}`}
+      onClick={onToggle}
+    >
+      <div className={`vehicle-row__box ${picked ? 'vehicle-row__box--picked' : ''}`}>{picked ? '✓' : ''}</div>
+      <div
+        className="vehicle-row__photo"
+        style={o.vehicle.main_photo_url ? { backgroundImage: `url(${o.vehicle.main_photo_url})` } : undefined}
+      />
+      <div>
+        <div className="vehicle-row__model">
+          {o.vehicle.make} {o.vehicle.model}
+        </div>
+        <div className="vehicle-row__tags">
+          <span className="vehicle-row__plate">{o.vehicle.plate}</span>
+          <span className="vehicle-row__sub">{o.vehicle.year}</span>
+          {o.kind === 'pre_assigned' && <span className="vehicle-tag vehicle-tag--preassigned">Pre-assigned</span>}
+          {o.kind === 'upgrade' && <span className="res-table__acriss">{o.category.code}</span>}
+          {chosenByClient && <span className="vehicle-tag vehicle-tag--chosen">Client's choice</span>}
+        </div>
+      </div>
+      <div>
+        <div>
+          {f.transmission === 'automatic' ? 'Automatic' : 'Manual'} · {f.passenger_capacity} seats
+        </div>
+        <div className="vehicle-row__sub">
+          {f.trunk_capacity_l} L trunk{f.bluetooth ? ' · Bluetooth' : ''}
+          {f.air_conditioning ? ' · A/C' : ''}
+        </div>
+      </div>
+      <div>
+        <div>{o.vehicle.current_km.toLocaleString('de-DE')} km</div>
+        <div className="vehicle-row__sub">
+          {toService.toLocaleString('de-DE')} km to service
+          {o.vehicle.damage_count > 0 && ` · ${o.vehicle.damage_count} damage${o.vehicle.damage_count > 1 ? 's' : ''}`}
+        </div>
+      </div>
+      <div>
+        <span className={`prep-chip ${o.ready ? 'prep-chip--ready' : 'prep-chip--inprep'}`}>
+          {o.ready ? 'Prepared' : 'In preparation'}
+        </span>
+      </div>
+      <div className="score-bar" title={why}>
+        <div className="score-bar__rank">#{o.rank}</div>
+        <div className="score-bar__track">
+          <div className="score-bar__fill" style={{ width: `${o.match_pct}%`, background: matchColor(o.match_pct) }} />
+        </div>
+        <div className="score-bar__value" style={{ color: matchColor(o.match_pct) }}>
+          {o.match_pct}%
+        </div>
+      </div>
+      <div className="vehicle-row__price">
+        {o.kind === 'upgrade' ? (
+          <>
+            <div className="vehicle-row__extra">+{clp(o.extra_daily_rate)}/day</div>
+            <div className="vehicle-row__sub">+{clp(o.extra_daily_rate * rentalDays)} total</div>
+          </>
+        ) : (
+          <div className="vehicle-row__sub">Included</div>
+        )}
+      </div>
     </div>
   );
 }

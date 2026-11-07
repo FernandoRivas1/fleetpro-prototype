@@ -47,6 +47,7 @@ class ReservationRead(BaseModel):
     return_date: datetime
     pickup_branch_id: uuid.UUID
     acriss_category_id: uuid.UUID
+    assigned_vehicle_id: uuid.UUID | None = None
     deposit_done_online: bool
     status: ReservationStatus
     # Not a Reservation column — Reservation stores driver identity inline
