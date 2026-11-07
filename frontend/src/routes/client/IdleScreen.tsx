@@ -53,12 +53,12 @@ export function IdleScreen({ stationLabel }: { stationLabel: string }) {
               justifyContent: 'center',
               color: '#fff',
               fontWeight: 700,
-              fontSize: 30,
+              fontSize: 26,
             }}
           >
-            F
+            RS
           </div>
-          <div style={{ fontSize: 56, fontWeight: 700, letterSpacing: '-0.035em', color: 'var(--fp-primary)' }}>Fleetpro</div>
+          <div style={{ fontSize: 56, fontWeight: 700, letterSpacing: '-0.035em', color: 'var(--fp-primary)' }}>Rental Software</div>
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
           <div

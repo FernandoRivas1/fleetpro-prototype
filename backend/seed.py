@@ -4,7 +4,7 @@ Re-runnable: it clears the rows it owns (in FK-safe order) before
 re-inserting, so `python seed.py` always leaves the DB in the same state.
 Run `alembic upgrade head` first so the tables exist.
 
-Seeds, per the Fleetpro prototype spec (plus later additions, noted below):
+Seeds, per the Rental Software prototype spec (plus later additions, noted below):
   - 4 ACRISS categories with a hierarchy and features (ECAR < CDAR < ICAR < FVAR)
   - 17 vehicles, mostly Available with deliberately varied mileage / next-service
     data so a "needs service soon" ranking is visibly meaningful, plus one

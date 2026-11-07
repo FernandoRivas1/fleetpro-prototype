@@ -196,8 +196,8 @@ export function ClientShell() {
     <div className="client-page">
       <header className="client-header">
         <div className="client-header__brand">
-          <div className="client-header__mark">F</div>
-          <div className="client-header__title">Fleetpro</div>
+          <div className="client-header__mark">RS</div>
+          <div className="client-header__title">Rental Software</div>
         </div>
         <div className="client-header__right">
           <div className="client-header__driver">

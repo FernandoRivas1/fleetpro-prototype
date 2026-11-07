@@ -23,7 +23,7 @@ interface Credentials {
 const StationPairingCtx = createContext<StationPairing | null>(null);
 
 function storageKey(deviceRole: DeviceRole): string {
-  return `fleetpro:pairing:${deviceRole}`;
+  return `rental-software:pairing:${deviceRole}`;
 }
 
 function readStoredCredentials(deviceRole: DeviceRole): Credentials | null {

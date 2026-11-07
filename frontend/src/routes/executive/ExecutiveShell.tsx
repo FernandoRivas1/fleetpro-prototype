@@ -13,7 +13,37 @@ const NAV_TITLES: Record<string, string> = { Drivers: 'Pre check-in' };
 // domains behind them).
 const WIRED_NAV = new Set(['Counter', 'Drivers']);
 
-/** The app chrome (Fleetpro Shells design, 1b) wrapping the search/walk-in
+// Simple 24x24 stroke icons for the sidebar, drawn inline so the app
+// doesn't need an icon library for six glyphs.
+const NAV_ICON_PATHS: Record<string, string[]> = {
+  Counter: ['M3 10h18', 'M5 10v10h14V10', 'M4 10l2-6h12l2 6', 'M10 20v-5h4v5'],
+  Contracts: ['M7 3h7l5 5v13H7z', 'M14 3v5h5', 'M10 13h6', 'M10 17h6'],
+  Fleet: ['M5 16V11l2-5h10l2 5v5', 'M3 16h18', 'M7 19a1.5 1.5 0 1 0 0-.01', 'M17 19a1.5 1.5 0 1 0 0-.01', 'M5 11h14'],
+  Drivers: ['M12 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8z', 'M4 21c0-4 3.6-6 8-6s8 2 8 6'],
+  Station: ['M4 5h16v11H4z', 'M9 20h6', 'M12 16v4'],
+  Reports: ['M4 20V10', 'M10 20V4', 'M16 20v-7', 'M22 20H2'],
+};
+
+function NavIcon({ label }: { label: string }) {
+  return (
+    <svg
+      className="exec-sidebar__icon"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth={1.7}
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
+      {(NAV_ICON_PATHS[label] ?? []).map((d) => (
+        <path key={d} d={d} />
+      ))}
+    </svg>
+  );
+}
+
+/** The app chrome (Rental Software Shells design, 1b) wrapping the search/walk-in
  * screen, the active session panel, or the Pre Check-in queue. */
 export function ExecutiveShell() {
   const pairing = useStationPairing();
@@ -77,7 +107,7 @@ export function ExecutiveShell() {
     <div className="exec-page">
       <div className="exec-shell">
         <aside className="exec-sidebar">
-          <div className="exec-sidebar__logo">F</div>
+          <div className="exec-sidebar__logo">RS</div>
           <nav className="exec-sidebar__nav">
             {NAV_ITEMS.map((label) => (
               <div
@@ -86,7 +116,7 @@ export function ExecutiveShell() {
                 style={{ cursor: WIRED_NAV.has(label) ? 'pointer' : 'default' }}
                 onClick={() => WIRED_NAV.has(label) && setActiveNav(label)}
               >
-                <div className="exec-sidebar__icon" />
+                <NavIcon label={label} />
                 <div>{label}</div>
               </div>
             ))}

@@ -4,7 +4,10 @@ import { dataStrings, type Lang } from './strings';
 import type { WizardStep } from './ClientShell';
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
-const GUEST_EMAIL_SUFFIX = '@walkin.fleetpro.local';
+// Placeholder the backend assigns a walk-in with no email (checkout.py's
+// start_checkout). Matches any @walkin.<name>.local host so rows created
+// before the product was renamed are still recognized as placeholders.
+const GUEST_EMAIL_RE = /@walkin\.[^@\s]+\.local$/;
 
 export function DataStep({
   status,
@@ -21,7 +24,7 @@ export function DataStep({
 }) {
   const t = dataStrings[lang];
   const { driver } = status;
-  const isGuestPlaceholder = driver.email.endsWith(GUEST_EMAIL_SUFFIX);
+  const isGuestPlaceholder = GUEST_EMAIL_RE.test(driver.email);
 
   const [firstName, setFirstName] = useState(driver.first_name);
   const [lastName, setLastName] = useState(driver.last_name);

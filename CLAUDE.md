@@ -1,4 +1,4 @@
-# Fleetpro — Product Context (prototype, RAC Check-out flow)
+# Rental Software — Product Context (prototype, RAC Check-out flow)
 
 ## What this is
 The rental car check-out flow: from contract creation (with or without a
@@ -7,7 +7,7 @@ devices synced live: the counter executive's computer and a tablet used by
 the client.
 
 ## Brand palette
-- primary / GRAY LEASING — #415364 — navigation, headers
+- primary / SLATE GRAY — #415364 — navigation, headers
 - accent / DEEP PURPLE — #6538e5 — CTAs, selected states
 - secondary / MID GRAY — #637b8f — secondary text, borders
 - Backgrounds: #FFFFFF or #F4F5F7
@@ -20,7 +20,7 @@ the client.
 - Client view (tablet): very few elements per screen, large text, generous
   touch targets, landscape orientation. This is the view the client
   directly sees and touches — it should feel premium, not administrative
-  (think Orange/SIXT counter experience).
+  (think a premium airport rental counter).
 
 ## Client check-out wizard order
 Rental details → Vehicle → Extras → Documents → Data → Deposit → Signature.

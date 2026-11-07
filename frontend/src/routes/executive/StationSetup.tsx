@@ -120,8 +120,8 @@ export function StationSetup() {
     <div className="station-setup">
       <header className="station-setup__header">
         <div className="station-setup__brand">
-          <div className="station-setup__mark">F</div>
-          <div className="station-setup__title">Fleetpro</div>
+          <div className="station-setup__mark">RS</div>
+          <div className="station-setup__title">Rental Software</div>
         </div>
         <div className="exec-chip">
           <div className="exec-chip__dot" style={{ background: 'var(--fp-border-input)' }} />

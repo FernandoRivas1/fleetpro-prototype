@@ -74,8 +74,6 @@
 .exec-sidebar__icon {
   width: 22px;
   height: 22px;
-  border-radius: 6px;
-  border: 1.6px solid currentColor;
 }
 
 .exec-sidebar__spacer {

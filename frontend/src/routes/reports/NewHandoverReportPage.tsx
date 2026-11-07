@@ -112,7 +112,7 @@ export function NewHandoverReportPage() {
     <div className="report-page">
       <div className="report-container">
         <div className="report-header">
-          <div className="report-header__mark">F</div>
+          <div className="report-header__mark">RS</div>
           <div className="report-header__title">Vehicle handover report</div>
         </div>
 
