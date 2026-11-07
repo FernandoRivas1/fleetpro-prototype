@@ -41,6 +41,10 @@ python seed.py
 `seed.py` clears and re-inserts its own rows each time it runs, so it's
 safe to re-run after schema changes.
 
+The public demo sets `DEMO_RESEED_ON_STARTUP=true`, which runs `seed.py`
+every time the server starts. Never set it on a database whose data you
+want to keep.
+
 ## Run the API
 
 ```bash

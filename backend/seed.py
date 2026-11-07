@@ -6,19 +6,22 @@ Run `alembic upgrade head` first so the tables exist.
 
 Seeds, per the Rental Software prototype spec (plus later additions, noted below):
   - 4 ACRISS categories with a hierarchy and features (ECAR < CDAR < ICAR < FVAR)
-  - 17 vehicles, mostly Available with deliberately varied mileage / next-service
-    data so a "needs service soon" ranking is visibly meaningful, plus one
-    each of Rented / InPrep / Inactive so the fleet view's status colors
-    (CLAUDE.md) all have something to render
-  - 4 drivers, one per loyalty tier (app/checkout/tiers.py): a Gold driver
-    with valid, verified documents; a Corporate driver with an EXPIRED
-    license (tier is never a shortcut past that gate — CLAUDE.md); a
-    Standard and a Silver driver, both clear to check out; plus two
-    personas that intentionally have NO Driver row, to simulate first-time
-    walk-ins the executive will register from scratch (see WALK_IN_* below
-    — only referenced by name/email in reservations)
-  - 7 reservations (one with deposit_done_online=True), spread across all
-    three branches
+  - 55 vehicles: at least three Available cars of every category at every
+    branch (five at the airport), with deliberately varied mileage /
+    next-service / damage data so the ranking is visibly meaningful, plus
+    a few Rented / InPrep / Inactive cars so the fleet view's status
+    colors (CLAUDE.md) all have something to render. Photos are the
+    illustrations in frontend/public/vehicles/.
+  - 7 drivers covering every loyalty tier (app/checkout/tiers.py): a Gold
+    driver with valid, verified documents; a Corporate driver with an
+    EXPIRED license (tier is never a shortcut past that gate — CLAUDE.md)
+    and one with a valid license; Standard and Silver drivers, all clear to
+    check out; plus five personas that intentionally have NO Driver row, to
+    simulate first-time walk-ins the executive will register from scratch
+    (see WALK_IN_* and EXTRA_ARRIVALS below — only referenced by
+    name/email in reservations)
+  - 13 reservations (one with deposit_done_online=True), four or five per
+    branch, with pickups from now through the next few days
   - 3 reservation pre-check-ins (app/checkout/precheckin.py), one per
     non-terminal PrecheckinStatus (requested / loaded / confirmed), so the
     executive's Pre Check-in queue has something at every stage
@@ -62,6 +65,20 @@ WALK_IN_EMAIL = "camila.rojas@example.com"
 WALK_IN_2_FIRST_NAME = "Diego"
 WALK_IN_2_LAST_NAME = "Fernandez"
 WALK_IN_2_EMAIL = "diego.fernandez@example.com"
+
+# Everyday arrivals on top of the scenario reservations in
+# seed_reservations, so every counter has a realistic queue in every
+# category. Benjamín, Antonia and Matías are further walk-ins with no
+# Driver row; the rest are registered drivers from seed_drivers.
+# (first_name, last_name, email, branch, category, pickup in hours, rental days)
+EXTRA_ARRIVALS = [
+    ("Isidora", "Paredes", "isidora.paredes@example.com", "SCL-APT", "FVAR", 1, 5),
+    ("Benjamín", "Castro", "benjamin.castro@example.com", "SCL-APT", "CDAR", 2, 3),
+    ("Sofía", "Herrera", "sofia.herrera@example.com", "SCL-CTR", "CDAR", 3, 4),
+    ("Matías", "Contreras", "matias.contreras@example.com", "SCL-NUN", "ECAR", 4, 2),
+    ("Antonia", "Reyes", "antonia.reyes@example.com", "SCL-CTR", "FVAR", 26, 6),
+    ("Tomás", "Vidal", "tomas.vidal@example.com", "SCL-NUN", "ICAR", 28, 3),
+]
 
 
 def clear_seeded_tables(db) -> None:
@@ -185,55 +202,96 @@ def seed_categories(db) -> dict[str, ACRISSCategory]:
     return {c.code: c for c in categories}
 
 
+# Models a Chilean rental fleet actually runs in each category, with the
+# body style used to pick the illustration in frontend/public/vehicles/.
+MODELS_BY_CATEGORY = {
+    "ECAR": [("Suzuki", "Swift"), ("Kia", "Morning"), ("Hyundai", "Grand i10"), ("Chevrolet", "Spark"), ("Suzuki", "Baleno")],
+    "CDAR": [("Toyota", "Yaris Sedan"), ("Hyundai", "Accent"), ("Kia", "Soluto"), ("Chevrolet", "Sail"), ("Nissan", "Versa")],
+    "ICAR": [("Toyota", "Corolla"), ("Nissan", "Sentra"), ("Hyundai", "Elantra"), ("Kia", "Cerato"), ("Mazda", "3 Sedan")],
+    "FVAR": [("Kia", "Sorento"), ("Hyundai", "Santa Fe"), ("Toyota", "Fortuner"), ("Mitsubishi", "Montero Sport"), ("Chevrolet", "Traverse")],
+}
+BODY_BY_CATEGORY = {"ECAR": "hatchback", "CDAR": "sedan", "ICAR": "sedan", "FVAR": "suv"}
+PAINT_COLORS = ["white", "silver", "gray", "black", "red", "blue"]
+
+# (year, current_km, km left until next service, damage_count). Cycled
+# through each branch's cars so the executive's ranking always has
+# something to separate: a nearly new car, one due for service, one with
+# registered damage, and so on.
+CONDITION_PROFILES = [
+    (2025, 4_200, 5_800, 0),
+    (2024, 18_500, 1_500, 0),
+    (2023, 36_000, 4_000, 1),
+    (2025, 9_800, 300, 0),
+    (2022, 58_000, 2_000, 2),
+]
+
+# Available cars per category at each branch. Every branch has at least
+# three of every category, so any reservation (and any upsell) always has
+# real options to show the client; the airport counter is the busiest.
+AVAILABLE_PER_CATEGORY = {"SCL-APT": 5, "SCL-CTR": 4, "SCL-NUN": 3}
+
+# Cars that are on the books but not available right now, so the fleet
+# view's status colors (green/deep purple/yellow/mid gray, CLAUDE.md) all
+# have something to render. (branch, category, status)
+UNAVAILABLE_CARS = [
+    ("SCL-APT", "ICAR", VehicleStatus.RENTED),
+    ("SCL-APT", "ECAR", VehicleStatus.RENTED),
+    ("SCL-APT", "FVAR", VehicleStatus.IN_PREP),
+    ("SCL-CTR", "CDAR", VehicleStatus.RENTED),
+    ("SCL-CTR", "FVAR", VehicleStatus.IN_PREP),
+    ("SCL-CTR", "ECAR", VehicleStatus.INACTIVE),
+    ("SCL-NUN", "ICAR", VehicleStatus.RENTED),
+]
+
+# Chilean plates are four consonants and two digits (e.g. "RJKL-11").
+PLATE_PREFIXES = {"SCL-APT": "RJ", "SCL-CTR": "HZ", "SCL-NUN": "LP"}
+PLATE_SERIES = {"ECAR": "BC", "CDAR": "DF", "ICAR": "GK", "FVAR": "TW"}
+
+
+def vehicle_photo_url(category_code: str, color: str) -> str:
+    """Served by the frontend itself, so it resolves on whichever origin the
+    executive console and the tablet are loaded from."""
+    return f"/vehicles/{BODY_BY_CATEGORY[category_code]}-{color}.svg"
+
+
 def seed_vehicles(
     db, categories: dict[str, ACRISSCategory], branches: dict[str, Branch]
 ) -> dict[str, Vehicle]:
-    centro = branches["SCL-CTR"].id
-    aeropuerto = branches["SCL-APT"].id
-    nunoa = branches["SCL-NUN"].id
-
-    # (plate, make, model, year, category_code, branch_id, current_km, next_service_km, damage_count, status)
-    rows = [
-        ("RJKL-11", "Chevrolet", "Sail", 2023, "ECAR", centro, 8_500, 10_000, 0, VehicleStatus.AVAILABLE),
-        ("RJKL-12", "Chevrolet", "Sail", 2022, "ECAR", centro, 52_000, 55_000, 1, VehicleStatus.AVAILABLE),
-        ("RJKL-13", "Suzuki", "Alto", 2023, "ECAR", aeropuerto, 15_000, 20_000, 0, VehicleStatus.AVAILABLE),
-        ("HZRT-21", "Toyota", "Yaris", 2023, "CDAR", centro, 12_000, 15_000, 0, VehicleStatus.AVAILABLE),
-        ("HZRT-22", "Toyota", "Yaris", 2021, "CDAR", aeropuerto, 78_000, 80_000, 2, VehicleStatus.AVAILABLE),
-        ("HZRT-23", "Hyundai", "Accent", 2022, "CDAR", centro, 34_000, 40_000, 0, VehicleStatus.AVAILABLE),
-        ("LMNB-31", "Toyota", "Corolla", 2023, "ICAR", aeropuerto, 6_000, 10_000, 0, VehicleStatus.AVAILABLE),
-        ("LMNB-32", "Nissan", "Sentra", 2022, "ICAR", centro, 41_000, 45_000, 0, VehicleStatus.AVAILABLE),
-        ("LMNB-33", "Toyota", "Corolla", 2020, "ICAR", aeropuerto, 95_000, 100_000, 3, VehicleStatus.AVAILABLE),
-        ("PWQX-41", "Chevrolet", "Suburban", 2023, "FVAR", centro, 9_000, 15_000, 0, VehicleStatus.AVAILABLE),
-        ("PWQX-42", "Toyota", "Highlander", 2022, "FVAR", aeropuerto, 28_000, 30_000, 0, VehicleStatus.AVAILABLE),
-        ("PWQX-43", "Kia", "Sorento", 2021, "FVAR", centro, 61_000, 65_000, 1, VehicleStatus.AVAILABLE),
-        # Give the new branch its own available inventory.
-        ("RJKL-14", "Chevrolet", "Sail", 2023, "ECAR", nunoa, 5_000, 10_000, 0, VehicleStatus.AVAILABLE),
-        ("HZRT-24", "Toyota", "Yaris", 2023, "CDAR", nunoa, 3_000, 15_000, 0, VehicleStatus.AVAILABLE),
-        # One of each non-Available status, so the fleet view's status
-        # colors (green/deep purple/yellow/mid gray, CLAUDE.md) all have
-        # something to render.
-        ("LMNB-34", "Nissan", "Sentra", 2021, "ICAR", aeropuerto, 44_000, 45_000, 0, VehicleStatus.RENTED),
-        ("PWQX-44", "Kia", "Sorento", 2022, "FVAR", centro, 20_000, 30_000, 0, VehicleStatus.IN_PREP),
-        ("RJKL-15", "Suzuki", "Alto", 2021, "ECAR", centro, 110_000, 100_000, 1, VehicleStatus.INACTIVE),
+    rows: list[tuple[str, str, VehicleStatus]] = [
+        (branch_code, category_code, VehicleStatus.AVAILABLE)
+        for branch_code, count in AVAILABLE_PER_CATEGORY.items()
+        for category_code in MODELS_BY_CATEGORY
+        for _ in range(count)
     ]
+    rows += UNAVAILABLE_CARS
 
-    vehicles = [
-        Vehicle(
-            id=uuid.uuid4(),
-            plate=plate,
-            make=make,
-            model=model,
-            year=year,
-            acriss_category_id=categories[category_code].id,
-            branch_id=branch_id,
-            status=status,
-            current_km=current_km,
-            next_service_km=next_service_km,
-            damage_count=damage_count,
-            main_photo_url=f"https://picsum.photos/seed/{plate}/640/400",
+    vehicles = []
+    serial: dict[tuple[str, str], int] = {}
+    for branch_code, category_code, vehicle_status in rows:
+        n = serial[(branch_code, category_code)] = serial.get((branch_code, category_code), 0) + 1
+        make, model = MODELS_BY_CATEGORY[category_code][(n - 1) % 5]
+        branch_offset = list(AVAILABLE_PER_CATEGORY).index(branch_code)
+        year, current_km, headroom_km, damage_count = CONDITION_PROFILES[(n - 1 + branch_offset) % len(CONDITION_PROFILES)]
+        if vehicle_status == VehicleStatus.INACTIVE:
+            # Pulled from service: overdue for maintenance.
+            year, current_km, headroom_km, damage_count = 2020, 112_000, -4_000, 1
+        color = PAINT_COLORS[(len(vehicles) * 5) % len(PAINT_COLORS)]
+        vehicles.append(
+            Vehicle(
+                id=uuid.uuid4(),
+                plate=f"{PLATE_PREFIXES[branch_code]}{PLATE_SERIES[category_code]}-{10 + n}",
+                make=make,
+                model=model,
+                year=year,
+                acriss_category_id=categories[category_code].id,
+                branch_id=branches[branch_code].id,
+                status=vehicle_status,
+                current_km=current_km,
+                next_service_km=current_km + headroom_km,
+                damage_count=damage_count,
+                main_photo_url=vehicle_photo_url(category_code, color),
+            )
         )
-        for plate, make, model, year, category_code, branch_id, current_km, next_service_km, damage_count, status in rows
-    ]
     db.add_all(vehicles)
     db.flush()
     return {v.plate: v for v in vehicles}
@@ -324,8 +382,63 @@ def seed_drivers(db) -> dict[str, Driver]:
             last_visit_date=(now - timedelta(days=140)).date(),
             tier=CustomerTier.SILVER,
         ),
-        # Two more personas (walk-ins) are deliberately NOT created here —
-        # see WALK_IN_* / WALK_IN_2_* constants above.
+        # Three more registered regulars, so each counter's arrivals list
+        # looks like a real day rather than one row per demo scenario.
+        Driver(
+            id=uuid.uuid4(),
+            first_name="Sofía",
+            last_name="Herrera",
+            email="sofia.herrera@example.com",
+            national_id_or_passport="17.444.555-6",
+            phone="+56 9 4567 8901",
+            license_number="LIC-001204",
+            license_expiration=(now + timedelta(days=1_200)).date(),
+            id_photo_url="https://picsum.photos/seed/sofia-id/400/260",
+            license_photo_url="https://picsum.photos/seed/sofia-lic/400/260",
+            documents_verified=True,
+            preferred_color="Rojo",
+            preferred_transmission=TransmissionType.MANUAL,
+            last_visit_date=(now - timedelta(days=45)).date(),
+            tier=CustomerTier.SILVER,
+        ),
+        # Corporate with a valid license — the Corporate tier's happy path,
+        # next to Jorge's blocked one.
+        Driver(
+            id=uuid.uuid4(),
+            first_name="Isidora",
+            last_name="Paredes",
+            email="isidora.paredes@example.com",
+            national_id_or_passport="14.333.222-1",
+            phone="+56 9 5678 9012",
+            license_number="LIC-000871",
+            license_expiration=(now + timedelta(days=520)).date(),
+            id_photo_url="https://picsum.photos/seed/isidora-id/400/260",
+            license_photo_url="https://picsum.photos/seed/isidora-lic/400/260",
+            documents_verified=True,
+            preferred_color="Blanco",
+            preferred_transmission=TransmissionType.AUTOMATIC,
+            last_visit_date=(now - timedelta(days=12)).date(),
+            tier=CustomerTier.CORPORATE,
+        ),
+        Driver(
+            id=uuid.uuid4(),
+            first_name="Tomás",
+            last_name="Vidal",
+            email="tomas.vidal@example.com",
+            national_id_or_passport="18.765.432-K",
+            phone="+56 9 6789 0123",
+            license_number="LIC-001377",
+            license_expiration=(now + timedelta(days=310)).date(),
+            id_photo_url="https://picsum.photos/seed/tomas-id/400/260",
+            license_photo_url="https://picsum.photos/seed/tomas-lic/400/260",
+            documents_verified=True,
+            preferred_color="Gris",
+            preferred_transmission=TransmissionType.AUTOMATIC,
+            last_visit_date=(now - timedelta(days=210)).date(),
+            tier=CustomerTier.STANDARD,
+        ),
+        # The walk-in personas are deliberately NOT created here — see
+        # WALK_IN_* / WALK_IN_2_* above and EXTRA_ARRIVALS below.
     ]
     db.add_all(drivers)
     db.flush()
@@ -447,6 +560,21 @@ def seed_reservations(
             status=ReservationStatus.CONFIRMED,
         ),
     ]
+    reservations += [
+        Reservation(
+            id=uuid.uuid4(),
+            driver_first_name=first_name,
+            driver_last_name=last_name,
+            driver_email=email,
+            pickup_date=now + timedelta(hours=pickup_in_hours),
+            return_date=now + timedelta(hours=pickup_in_hours, days=rental_days),
+            pickup_branch_id=branches[branch_code].id,
+            acriss_category_id=categories[category_code].id,
+            deposit_done_online=False,
+            status=ReservationStatus.CONFIRMED,
+        )
+        for first_name, last_name, email, branch_code, category_code, pickup_in_hours, rental_days in EXTRA_ARRIVALS
+    ]
     db.add_all(reservations)
     db.flush()
 
@@ -493,24 +621,21 @@ def seed_reservations(
 
 
 def seed_pre_handover_reports(db, vehicles: dict[str, Vehicle]) -> None:
+    # The first Economy car at Centro and the first Intermediate car at the
+    # airport (see seed_vehicles' plate scheme).
+    clean, scratched = vehicles["HZBC-11"], vehicles["RJGK-11"]
     reports = [
         PreHandoverReport(
             id=uuid.uuid4(),
-            vehicle_id=vehicles["RJKL-11"].id,
-            photos=[
-                "https://picsum.photos/seed/RJKL-11-front/640/400",
-                "https://picsum.photos/seed/RJKL-11-rear/640/400",
-            ],
+            vehicle_id=clean.id,
+            photos=[clean.main_photo_url],
             damage_diagram={"scratches": [], "dents": [], "notes": "No damage found."},
             consumed=False,
         ),
         PreHandoverReport(
             id=uuid.uuid4(),
-            vehicle_id=vehicles["LMNB-31"].id,
-            photos=[
-                "https://picsum.photos/seed/LMNB-31-front/640/400",
-                "https://picsum.photos/seed/LMNB-31-rear/640/400",
-            ],
+            vehicle_id=scratched.id,
+            photos=[scratched.main_photo_url],
             damage_diagram={
                 "scratches": [{"panel": "rear_bumper", "severity": "minor"}],
                 "dents": [],
@@ -566,8 +691,8 @@ def run() -> None:
         print(f"  branches: {len(branches)}")
         print(f"  acriss_categories: {len(categories)}")
         print(f"  vehicles: {len(vehicles)}")
-        print(f"  drivers: {len(drivers)} (+ 2 unregistered walk-in personas)")
-        print("  reservations: 7")
+        print(f"  drivers: {len(drivers)} (+ 5 unregistered walk-in personas)")
+        print(f"  reservations: {db.query(Reservation).count()}")
         print("  reservation_precheckins: 3 (requested / loaded / confirmed)")
         print("  pre_handover_reports: 2")
         print("  extras: 5")

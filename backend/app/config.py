@@ -40,6 +40,13 @@ class Settings(BaseSettings):
 
     environment: str = "development"
 
+    # Public demo only: rerun seed.py every time the server starts. The
+    # free hosting tier stops the server after ~15 idle minutes, so each
+    # new visitor wakes it up to a full fleet with pickups dated from
+    # today, instead of whatever earlier visitors' check-outs left behind.
+    # Never enable this against a database whose data you want to keep.
+    demo_reseed_on_startup: bool = False
+
     @property
     def sqlalchemy_database_url(self) -> str:
         """Normalize to the psycopg (v3) driver, which ships prebuilt wheels

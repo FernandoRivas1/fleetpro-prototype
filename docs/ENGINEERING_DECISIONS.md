@@ -90,6 +90,13 @@ first. If the backend doesn't answer within 1.5 s, it explains that the
 server is waking up and shows progress. A warm backend never shows that
 screen.
 
+The same sleep keeps the public demo fresh. With `DEMO_RESEED_ON_STARTUP`
+on, the backend reruns `seed.py` every time it starts, so each new visitor
+gets a full fleet and pickups dated from today, not whatever earlier
+visitors' check-outs left behind. It only starts after ~15 idle minutes,
+so nobody is mid-check-out when it happens. The seed keeps at least three
+available cars in every category at every branch, and a test enforces it.
+
 ## Known gaps (deliberate, for a prototype)
 
 - Deposit authorization is stubbed; there is no payment gateway.
