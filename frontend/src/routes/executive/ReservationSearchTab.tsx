@@ -30,8 +30,11 @@ function fmtDate(iso: string): string {
   const d = new Date(iso);
   return `${d.getDate()} ${MONTHS[d.getMonth()]} ${d.getFullYear()}`;
 }
+// Local time, like fmtDate: a UTC clock time next to a local date shows a
+// Santiago counter every pickup three hours late, and evening ones on the
+// wrong day.
 function fmtTime(iso: string): string {
-  return new Date(iso).toISOString().slice(11, 16);
+  return new Date(iso).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
 }
 function daysBetween(a: string, b: string): string {
   const n = Math.round((new Date(b).getTime() - new Date(a).getTime()) / 86_400_000);
