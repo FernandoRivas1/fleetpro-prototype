@@ -368,12 +368,15 @@ def _infer_current_step(contract: RentalContract, driver: Driver) -> CheckoutSte
         return CheckoutStep.COMPLETED
     if any(sig.type is SignatureType.CONTRACT for sig in contract.signatures):
         return CheckoutStep.AWAITING_HANDOVER
+    # Checked before the deposit: a reservation paid online in advance
+    # starts with an already-authorized Deposit (see start_checkout), and
+    # that must not skip the client past choosing a vehicle.
+    if contract.vehicle_id is None:
+        if not contract.rental_details_confirmed:
+            return CheckoutStep.RENTAL_DETAILS
+        return CheckoutStep.VEHICLE_SELECTION
     if contract.deposit is not None and contract.deposit.status is DepositStatus.AUTHORIZED:
         return CheckoutStep.AWAITING_SIGNATURE
-    if contract.vehicle_id is not None:
-        if not driver.is_ready_for_checkout():
-            return CheckoutStep.DOCUMENT_VERIFICATION
-        return CheckoutStep.EXTRAS_AND_DEPOSIT
-    if not contract.rental_details_confirmed:
-        return CheckoutStep.RENTAL_DETAILS
-    return CheckoutStep.VEHICLE_SELECTION
+    if not driver.is_ready_for_checkout():
+        return CheckoutStep.DOCUMENT_VERIFICATION
+    return CheckoutStep.EXTRAS_AND_DEPOSIT

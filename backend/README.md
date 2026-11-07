@@ -1,4 +1,4 @@
-# Fleetpro backend
+# Rental Software backend
 
 FastAPI + SQLAlchemy 2.0 + Alembic, organized by domain:
 
@@ -46,3 +46,23 @@ safe to re-run after schema changes.
 ```bash
 uvicorn app.main:app --reload
 ```
+
+## Tests
+
+The suite runs against a real Postgres database, which it migrates and
+**reseeds before every API test**, so point it at a throwaway database.
+It reads only `TEST_DATABASE_URL` and refuses to run without it; it never
+falls back to `DATABASE_URL`.
+
+```bash
+pip install -r requirements-dev.txt
+TEST_DATABASE_URL=postgresql://postgres:postgres@localhost:5432/rental_test pytest
+```
+
+- `tests/test_rules.py`: unit tests for tier perks, the documents gate,
+  vehicle ranking and settings parsing (no database needed beyond import).
+- `tests/test_checkout_api.py`: the check-out flow end to end over HTTP,
+  including every "Critical business rule" from `CLAUDE.md`.
+
+CI (`.github/workflows/ci.yml`) runs the same suite against a Postgres
+service container on every push and pull request.
