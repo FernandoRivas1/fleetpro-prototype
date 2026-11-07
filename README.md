@@ -12,7 +12,7 @@ vehicle handover report. Two devices run the flow together, synced live: the
 counter agent's **executive console** and a **client tablet** the customer
 signs on.
 
-**[Live demo →](https://fleetpro-prototype.vercel.app)** · open
+**[Live demo →](https://rental-software-demo.vercel.app)** · open
 `/executive` in one window and `/client` in another (or on a tablet), then
 pair them with the PIN. The backend runs on a free tier, so the first visit
 can take about a minute while it wakes up.
