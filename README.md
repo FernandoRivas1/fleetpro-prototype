@@ -129,6 +129,7 @@ Open `http://localhost:5173/executive`, create a station, then open
 | Valentina Muñoz | Silver | half deposit |
 | Felipe Soto | Standard | the baseline flow |
 | Jorge Alvarez | Corporate | an **expired license**, which blocks the deposit and signature |
+| Isidora Paredes | Corporate | the Corporate tier with a valid license |
 | Camila Rojas | — | a first-time walk-in with no documents on file |
 
 ## Tests
