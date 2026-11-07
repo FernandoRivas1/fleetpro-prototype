@@ -1,32 +1,28 @@
-# React + TypeScript + Vite
+# Rental Software — frontend
 
-This template provides a minimal setup to get React working in Vite with HMR and some Oxlint rules.
+React 19 + TypeScript + Vite. One app with separate routes for each device
+and audience:
 
-Currently, two official plugins are available:
+| Route | Who uses it |
+|---|---|
+| `/executive` | Counter agent's console: station setup, reservations, the live session panel |
+| `/client` | Customer-facing tablet: the 7-step check-out wizard (EN/ES) |
+| `/precheckin` | Customer's remote pre check-in portal |
+| `/report/pre/:id`, `/report/new/:id` | Parking-lot handover reports |
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
+`src/components/BackendWakeGate.tsx` wraps every route. It pings the
+backend's `/health` first and, only if the free-tier server is asleep,
+shows a "waking up the server" screen instead of a blank page.
 
-## React Compiler
+## Scripts
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
-
-## Expanding the Oxlint configuration
-
-If you are developing a production application, we recommend enabling type-aware lint rules by installing `oxlint-tsgolint` and editing `.oxlintrc.json`:
-
-```json
-{
-  "$schema": "./node_modules/oxlint/configuration_schema.json",
-  "plugins": ["react", "typescript", "oxc"],
-  "options": {
-    "typeAware": true
-  },
-  "rules": {
-    "react/rules-of-hooks": "error",
-    "react/only-export-components": ["warn", { "allowConstantExport": true }]
-  }
-}
+```bash
+npm install
+npm run dev      # http://localhost:5173, expects the API at VITE_API_BASE_URL (default http://localhost:8000)
+npm test         # Vitest + Testing Library
+npm run lint     # oxlint
+npm run build    # type-check + production build
 ```
 
-See the [Oxlint rules documentation](https://oxc.rs/docs/guide/usage/linter/rules) for the full list of rules and categories.
+Configuration lives in `.env` (see `.env.example`). Design tokens (colors,
+type) are in `src/styles/tokens.css`.

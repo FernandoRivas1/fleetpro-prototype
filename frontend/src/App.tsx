@@ -1,4 +1,5 @@
 import { BrowserRouter, Route, Routes } from 'react-router-dom';
+import { BackendWakeGate } from './components/BackendWakeGate';
 import { Home } from './routes/Home';
 import { ExecutiveApp } from './routes/executive/ExecutiveApp';
 import { ClientApp } from './routes/client/ClientApp';
@@ -8,15 +9,17 @@ import { PrecheckinApp } from './routes/precheckin/PrecheckinApp';
 
 export default function App() {
   return (
-    <BrowserRouter>
-      <Routes>
-        <Route path="/" element={<Home />} />
-        <Route path="/executive" element={<ExecutiveApp />} />
-        <Route path="/client" element={<ClientApp />} />
-        <Route path="/precheckin" element={<PrecheckinApp />} />
-        <Route path="/report/pre/:preReportId" element={<PreHandoverReportPage />} />
-        <Route path="/report/new/:contractId" element={<NewHandoverReportPage />} />
-      </Routes>
-    </BrowserRouter>
+    <BackendWakeGate>
+      <BrowserRouter>
+        <Routes>
+          <Route path="/" element={<Home />} />
+          <Route path="/executive" element={<ExecutiveApp />} />
+          <Route path="/client" element={<ClientApp />} />
+          <Route path="/precheckin" element={<PrecheckinApp />} />
+          <Route path="/report/pre/:preReportId" element={<PreHandoverReportPage />} />
+          <Route path="/report/new/:contractId" element={<NewHandoverReportPage />} />
+        </Routes>
+      </BrowserRouter>
+    </BackendWakeGate>
   );
 }
