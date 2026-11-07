@@ -1,6 +1,6 @@
 # Rental Software — Counter Check-out
 
-[![CI](https://github.com/FernandoRivas1/fleetpro-prototype/actions/workflows/ci.yml/badge.svg)](https://github.com/FernandoRivas1/fleetpro-prototype/actions/workflows/ci.yml)
+[![CI](https://github.com/FernandoRivas1/rental-software/actions/workflows/ci.yml/badge.svg)](https://github.com/FernandoRivas1/rental-software/actions/workflows/ci.yml)
 ![Python](https://img.shields.io/badge/Python-FastAPI-009688)
 ![TypeScript](https://img.shields.io/badge/TypeScript-React%2019-3178c6)
 ![Postgres](https://img.shields.io/badge/DB-Postgres-336791)
