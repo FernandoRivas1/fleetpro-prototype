@@ -281,6 +281,7 @@ async def start_checkout(payload: CheckoutStartRequest, db: Session = Depends(ge
 
     # The tablet (and any other device) already connected on this station's
     # channel is listening for exactly this — no separate pairing needed.
+    manager.remember_step(station.id, None)
     await manager.broadcast(
         station.id,
         {

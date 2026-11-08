@@ -30,9 +30,14 @@ function matchColor(pct: number): string {
 
 export function VehiclesCard({
   status,
+  clientStep,
+  vehicleStep,
   onSent,
 }: {
   status: CheckoutStatusResponse;
+  /** Index of the wizard step the tablet is showing, and of the Vehicle step. */
+  clientStep: number;
+  vehicleStep: number;
   onSent: () => void;
 }) {
   const pairing = useStationPairing();
@@ -47,6 +52,8 @@ export function VehiclesCard({
   const [picks, setPicks] = useState<Set<string> | null>(null);
   const [sent, setSent] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // null follows the default below until the agent opens or closes it.
+  const [openChoice, setOpenChoice] = useState<boolean | null>(null);
 
   // A new customer starts a fresh shortlist.
   const categoryId = status.current_category?.id ?? null;
@@ -57,6 +64,7 @@ export function VehiclesCard({
     setPicks(null);
     setSent(false);
     setError(null);
+    setOpenChoice(null);
   }
 
   // Also refetched when the client picks a car, so the list reflects it
@@ -99,13 +107,36 @@ export function VehiclesCard({
   };
 
   const chosen = data?.options.find((o) => o.vehicle.id === chosenId) ?? null;
+  const clientHere = !locked && clientStep === vehicleStep;
+  // Folds itself away once the client has picked a car and moved on.
+  const done = chosenId !== null && clientStep > vehicleStep;
+  const open = !locked && (openChoice ?? !done);
   const sections = (['pre_assigned', 'same_category', 'upgrade'] as const)
     .map((kind) => ({ kind, options: data?.options.filter((o) => o.kind === kind) ?? [] }))
     .filter((s) => s.options.length > 0);
 
   return (
     <div className={`session-card ${locked ? 'session-card--locked' : ''}`}>
-      <div className="session-card__head">
+      {/* The whole header toggles on click; the chevron is the keyboard-
+          and screen-reader-reachable control for the same thing. */}
+      <div
+        className={`session-card__head ${locked ? '' : 'session-card__head--toggle'}`}
+        onClick={() => !locked && setOpenChoice(!open)}
+      >
+        {!locked && (
+          <button
+            type="button"
+            className={`session-card__chevron ${open ? 'session-card__chevron--open' : ''}`}
+            aria-expanded={open}
+            aria-label={open ? 'Collapse candidate vehicles' : 'Expand candidate vehicles'}
+            onClick={(e) => {
+              e.stopPropagation();
+              setOpenChoice(!open);
+            }}
+          >
+            ▸
+          </button>
+        )}
         <div className={`session-card__badge ${!locked ? (sent || chosen ? 'session-card__badge--done' : 'session-card__badge--active') : ''}`}>
           1
         </div>
@@ -119,20 +150,35 @@ export function VehiclesCard({
                 ? 'Sent to tablet'
                 : `Shortlist up to ${MAX_SHORTLIST}`}
         </div>
+        {clientHere && (
+          <div className="client-here-chip">
+            <span className="step-track__here-dot" />
+            Client is here
+          </div>
+        )}
         <div className="session-card__spacer" />
-        {!locked && data && (
+        {!open && !locked && <div className="locked-hint">Show options</div>}
+        {open && data && (
           <>
             <div className="locked-hint">
               {picked.size} of {MAX_SHORTLIST} selected
             </div>
-            <button type="button" className="btn btn--sm" disabled={picked.size === 0} onClick={send}>
+            <button
+              type="button"
+              className="btn btn--sm"
+              disabled={picked.size === 0}
+              onClick={(e) => {
+                e.stopPropagation();
+                send();
+              }}
+            >
               {sent ? 'Options on tablet ✓' : 'Send options to client'}
             </button>
           </>
         )}
       </div>
 
-      {!locked && (
+      {open && (
         <div className="session-card__body">
           {error && <div className="field__error">{error}</div>}
           {!data && !error && <div className="locked-hint">Loading candidates…</div>}

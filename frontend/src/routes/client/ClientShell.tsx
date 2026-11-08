@@ -148,7 +148,7 @@ export function ClientShell() {
   // through this one state slot.
   useEffect(() => {
     if (!contractId) return;
-    pairing.send('step_updated', { step });
+    pairing.send('step_updated', { step, contract_id: contractId });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [step, contractId]);
 

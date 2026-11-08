@@ -99,7 +99,7 @@ export function ExtrasStep({
       <div style={{ flex: 1 }} />
 
       <footer className="client-footer">
-        <button type="button" className="client-btn--ghost" onClick={() => goTo('extras')}>
+        <button type="button" className="client-btn--ghost" onClick={() => goTo('vehicle')}>
           {t.back}
         </button>
         <div className="client-status">{count === 0 ? t.noExtras : `${clp(perDay)}${t.perDay}`}</div>

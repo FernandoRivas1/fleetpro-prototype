@@ -149,6 +149,26 @@ def test_tablet_pairs_with_pin_then_with_stored_credentials(client):
     assert client.get(f"{API}/stations/{station['station_id']}").json()["paired_at"] is not None
 
 
+def test_a_reconnecting_device_learns_the_clients_current_step(client):
+    station = _new_station(client, _branch_id(client))
+    url = f"{API}/checkout/ws/{station['station_id']}?token={station['pairing_token']}"
+    step = {"type": "step_updated", "payload": {"step": "vehicle", "contract_id": "c1"}}
+
+    with client.websocket_connect(url) as tablet:
+        tablet.send_json(step)
+        # A console that opens (or reloads) afterwards is told straight away.
+        with client.websocket_connect(url) as console:
+            assert console.receive_json() == step
+
+        # After a reset there's nothing to replay: the first frame a new
+        # console gets is the tablet's next live step, not the stale one.
+        tablet.send_json({"type": "session_reset", "payload": {}})
+        with client.websocket_connect(url) as console:
+            next_step = {"type": "step_updated", "payload": {"step": "rentalDetails", "contract_id": "c2"}}
+            tablet.send_json(next_step)
+            assert console.receive_json() == next_step
+
+
 def test_pairing_rejects_a_wrong_token(client):
     station = _new_station(client, _branch_id(client))
     res = client.post(f"{API}/stations/pair", json={"station_id": station["station_id"], "pairing_token": "nope"})

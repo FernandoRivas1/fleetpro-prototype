@@ -2064,3 +2064,68 @@
   text-align: center;
   color: var(--fp-text-muted);
 }
+
+/* ---- Where the client is, live --------------------------------------- */
+
+.step-track__label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.step-track__here-dot {
+  flex: none;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--fp-accent);
+  animation: client-here-pulse 1.6s ease-out infinite;
+}
+
+@keyframes client-here-pulse {
+  0% { box-shadow: 0 0 0 0 rgba(101, 56, 229, 0.5); }
+  100% { box-shadow: 0 0 0 7px rgba(101, 56, 229, 0); }
+}
+
+.client-here-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--fp-accent);
+  background: #f0ebfd;
+  border-radius: 999px;
+  padding: 4px 10px;
+}
+
+/* ---- Collapsible session cards ---------------------------------------- */
+
+.session-card__head--toggle {
+  cursor: pointer;
+  user-select: none;
+}
+
+.session-card__head--toggle:hover {
+  background: var(--fp-bg-subtle, #f8f9fb);
+}
+
+.session-card__head:last-child {
+  border-bottom: none;
+}
+
+.session-card__chevron {
+  border: none;
+  background: none;
+  padding: 4px;
+  margin-left: -6px;
+  cursor: pointer;
+  font-size: 17px;
+  line-height: 1;
+  color: var(--fp-secondary);
+  transition: transform 0.15s ease;
+}
+
+.session-card__chevron--open {
+  transform: rotate(90deg);
+}
