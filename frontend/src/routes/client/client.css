@@ -694,21 +694,6 @@
   padding: 3px 9px;
 }
 
-.car-card__tags {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-}
-
-.car-card__tag {
-  font-size: 13px;
-  color: var(--fp-secondary);
-  background: #fff;
-  border: 1px solid var(--fp-border);
-  border-radius: 999px;
-  padding: 5px 11px;
-}
-
 .car-card__btn {
   margin-top: auto;
   height: 56px;
@@ -762,71 +747,70 @@
   background: linear-gradient(180deg, #fbf9ff 0%, #ffffff 60%);
 }
 
-.car-card__prep {
-  position: absolute;
-  bottom: 12px;
-  right: 12px;
-  display: inline-flex;
-  align-items: center;
-  gap: 7px;
-  font-size: 13px;
-  font-weight: 600;
-  border-radius: 999px;
-  padding: 5px 11px;
-  background: #fff;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
-}
-
-.car-card__prep::before {
-  content: '';
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
-  background: currentColor;
-}
-
-.car-card__prep--ready { color: var(--fp-success); }
-.car-card__prep--inprep { color: var(--fp-warning); }
-
-.car-card__photo-wrap {
-  position: relative;
-  flex: none;
-}
-
 .car-card__category {
   font-size: 15px;
   color: var(--fp-secondary);
   margin-top: -8px;
 }
 
-.car-card__tag--gain {
-  color: var(--fp-accent);
-  border-color: #d9cdfa;
-  background: #f5f1ff;
-  font-weight: 600;
+.car-card__specs {
+  display: flex;
+  flex-direction: column;
+  border-top: 1px solid var(--fp-border);
 }
 
-.car-card__match {
+.car-card__spec {
   display: flex;
   align-items: center;
+  justify-content: space-between;
   gap: 10px;
-  font-size: 14px;
+  padding: 7px 0;
+  border-bottom: 1px solid var(--fp-border);
+  font-size: 15px;
+}
+
+.car-card__spec-label {
   color: var(--fp-secondary);
 }
 
-.car-card__match-track {
-  flex: 1;
-  height: 6px;
-  border-radius: 3px;
-  background: var(--fp-surface-muted);
-  overflow: hidden;
+.car-card__spec-value {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-weight: 600;
 }
 
-.car-card__match-fill {
-  height: 6px;
-  border-radius: 3px;
-  background: var(--fp-status-available);
+/* An upgrade's improvements over the booking stand out from the rest. */
+.car-card__spec--gain {
+  margin: 0 -10px;
+  padding: 7px 10px;
+  border-radius: 8px;
+  border-bottom-color: transparent;
+  background: #f1ebff;
 }
+
+.car-card__spec--gain .car-card__spec-label,
+.car-card__spec--gain .car-card__spec-value {
+  color: var(--fp-accent);
+}
+
+.car-card__spec-gain {
+  font-size: 12px;
+  font-weight: 700;
+  color: #fff;
+  background: var(--fp-accent);
+  border-radius: 999px;
+  padding: 2px 8px;
+}
+
+.car-card__gain-note {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--fp-accent);
+}
+
+.car-grid--n4 .car-card__spec { font-size: 14px; padding: 6px 0; }
+.car-grid--n4 .car-card__spec--gain { padding: 6px 8px; margin: 0 -8px; }
 
 .car-card__price {
   font-size: 15px;

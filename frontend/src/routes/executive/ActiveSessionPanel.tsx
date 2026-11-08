@@ -82,9 +82,9 @@ export function ActiveSessionPanel({
   // actually see what the client scanned instead of a plain placeholder,
   // same as scannedData above: never persisted, gone on reload.
   const [scannedPhotos, setScannedPhotos] = useState<Record<string, string | null> | null>(null);
-  // Set from 'step_updated' broadcasts — see CLIENT_STEP_INDEX above. Never
-  // persisted, so a reload falls back to the coarser status.current_step
-  // alone, same limitation already accepted for candidatesSent etc.
+  // Set from 'step_updated' broadcasts — see CLIENT_STEP_INDEX above. The
+  // server replays the tablet's latest one when this console connects (see
+  // ws.py), so a reload still knows the client's screen.
   const [liveStepIndex, setLiveStepIndex] = useState<number | null>(null);
   const [resetOpen, setResetOpen] = useState(false);
   const [resetting, setResetting] = useState(false);
@@ -115,8 +115,10 @@ export function ActiveSessionPanel({
         setScannedPhotos((message.payload.photos as Record<string, string | null>) ?? null);
       }
       if (message.type === 'step_updated') {
+        // Ignore a step left over from the previous customer.
+        const forContract = message.payload.contract_id;
         const idx = CLIENT_STEP_INDEX[message.payload.step as string];
-        if (idx !== undefined) setLiveStepIndex(idx);
+        if (idx !== undefined && (forContract === undefined || forContract === contractId)) setLiveStepIndex(idx);
       }
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -144,10 +146,10 @@ export function ActiveSessionPanel({
   if (error) return <div className="centered-empty">{error}</div>;
   if (!status) return <div className="centered-empty">Loading…</div>;
 
-  // Max, not a straight override: never lets a stale live broadcast (e.g.
-  // one that arrived before a page reload) show LESS progress than what
-  // the persisted state already confirms.
-  const stepIdx = Math.max(STEP_INDEX[status.current_step], liveStepIndex ?? 0);
+  // The tablet's own report wins, so going Back shows here too; the
+  // persisted-state step is only the fallback until one arrives.
+  const stepIdx = liveStepIndex ?? STEP_INDEX[status.current_step];
+  const clientStep = STEP_LABELS[stepIdx];
   const contractLabel = `CT-${contractId.slice(0, 8).toUpperCase()}`;
   const linked = pairing.status === 'open';
 
@@ -168,9 +170,9 @@ export function ActiveSessionPanel({
           </div>
           <div className="session-header__divider" />
           <div>
-            <div className="session-header__step-label">Client is on</div>
+            <div className="session-header__step-label">{linked ? 'Client is on' : 'Client was last on'}</div>
             <div className="session-header__step-value">
-              Step {stepIdx + 1} of {STEP_LABELS.length} — {STEP_LABELS[stepIdx]}
+              Step {stepIdx + 1} of {STEP_LABELS.length} — {clientStep}
             </div>
           </div>
           <div className="live-badge">
@@ -196,6 +198,7 @@ export function ActiveSessionPanel({
               <div
                 className={`step-track__label ${i === stepIdx ? 'step-track__label--active' : i < stepIdx ? 'step-track__label--done' : ''}`}
               >
+                {i === stepIdx && <span className="step-track__here-dot" title="The client is on this screen" />}
                 {label}
               </div>
             </div>
@@ -209,8 +212,19 @@ export function ActiveSessionPanel({
           self-service with no executive card — only Deposit and
           Signature get a "built in a later stage" placeholder. */}
       <div className="session-body">
-        <VehiclesCard status={status} onSent={() => setCandidatesSent(true)} />
-        <DocumentsCard status={status} onConfirmed={refresh} scannedData={scannedData} scannedPhotos={scannedPhotos} />
+        <VehiclesCard
+          status={status}
+          clientStep={stepIdx}
+          vehicleStep={STEP_LABELS.indexOf('Vehicle')}
+          onSent={() => setCandidatesSent(true)}
+        />
+        <DocumentsCard
+          status={status}
+          onConfirmed={refresh}
+          scannedData={scannedData}
+          scannedPhotos={scannedPhotos}
+          clientHere={clientStep === 'Documents' || clientStep === 'Data'}
+        />
 
         {['Deposit', 'Signature'].map((label, i) => (
           <div className="session-card session-card--future" key={label}>

@@ -4,9 +4,11 @@ client tablet — see "Two devices synced live" in CLAUDE.md.
 Every station gets one broadcast channel: WS /api/v1/checkout/ws/{station_id}
 Any message a client sends is relayed verbatim to every *other* client on
 the same station_id. Nothing here is persisted — this is transport, not a
-source of truth — with the single exception of Station.active_contract_id,
-kept up to date so a device that reconnects mid-flow knows which contract
-is currently open.
+source of truth — with two exceptions: Station.active_contract_id, kept
+up to date so a device that reconnects mid-flow knows which contract is
+currently open, and the tablet's last step_updated, held in memory and
+replayed to every device that connects so a reloaded executive console
+still knows which screen the client is on.
 """
 import enum
 import secrets
@@ -64,9 +66,20 @@ class ConnectionManager:
 
     def __init__(self) -> None:
         self._connections: dict[uuid.UUID, list[WebSocket]] = {}
+        self._last_step: dict[uuid.UUID, dict] = {}
 
-    def connect(self, station_id: uuid.UUID, websocket: WebSocket) -> None:
+    async def connect(self, station_id: uuid.UUID, websocket: WebSocket) -> None:
         self._connections.setdefault(station_id, []).append(websocket)
+        last_step = self._last_step.get(station_id)
+        if last_step is not None:
+            await websocket.send_json(last_step)
+
+    def remember_step(self, station_id: uuid.UUID, message: dict | None) -> None:
+        """Keep (or with None, forget) the client's latest step_updated."""
+        if message is None:
+            self._last_step.pop(station_id, None)
+        else:
+            self._last_step[station_id] = message
 
     def disconnect(self, station_id: uuid.UUID, websocket: WebSocket) -> None:
         conns = self._connections.get(station_id)
@@ -98,6 +111,7 @@ class ConnectionManager:
 
     async def disconnect_all(self, station_id: uuid.UUID, code: int, reason: str) -> None:
         """Forcibly close every connection on a station (used on unlink)."""
+        self._last_step.pop(station_id, None)
         for ws in self._connections.pop(station_id, []):
             try:
                 await ws.close(code=code, reason=reason)
@@ -132,7 +146,7 @@ async def checkout_ws(
     station.last_seen_at = datetime.now(timezone.utc)
     db.commit()
 
-    manager.connect(station_id, websocket)
+    await manager.connect(station_id, websocket)
     try:
         while True:
             raw = await websocket.receive_json()
@@ -144,9 +158,13 @@ async def checkout_ws(
                 await websocket.send_json({"type": "error", "payload": {"message": str(exc)}})
                 continue
 
-            if message.type is CheckoutMessageType.CONTRACT_STARTED:
+            if message.type is CheckoutMessageType.STEP_UPDATED:
+                manager.remember_step(station_id, message.model_dump(mode="json"))
+            elif message.type is CheckoutMessageType.CONTRACT_STARTED:
+                manager.remember_step(station_id, None)
                 _update_active_contract(db, station, message.payload.get("contract_id"))
             elif message.type is CheckoutMessageType.SESSION_RESET:
+                manager.remember_step(station_id, None)
                 # Mirrors CONTRACT_STARTED above: keep active_contract_id
                 # current so a reload doesn't resurrect the session either
                 # device just walked away from.

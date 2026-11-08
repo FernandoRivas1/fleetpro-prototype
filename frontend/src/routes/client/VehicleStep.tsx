@@ -16,25 +16,30 @@ function clp(n: number): string {
   return `$${n.toLocaleString('de-DE')}`;
 }
 
-/** Feature chips for a car; on an upgrade, what it adds over the booked
- * category is called out (accented) first. */
-function featureTags(f: ACRISSFeatures, booked: ACRISSFeatures, isUpgrade: boolean, t: Strings) {
-  const tags: { text: string; gain: boolean }[] = [];
+interface SpecRow {
+  label: string;
+  value: string;
+  /** What an upgrade adds over the booked category, e.g. "+1" or "New". */
+  gain: string | null;
+}
+
+/** The same spec rows, in the same order, on every card so they line up
+ * side by side; on an upgrade, the rows that beat the booking are flagged. */
+function specRows(f: ACRISSFeatures, booked: ACRISSFeatures, isUpgrade: boolean, t: Strings): SpecRow[] {
   const seats = f.passenger_capacity - booked.passenger_capacity;
   const trunk = f.trunk_capacity_l - booked.trunk_capacity_l;
-  const gainedAuto = isUpgrade && f.transmission === 'automatic' && booked.transmission !== 'automatic';
-  const gainedBluetooth = isUpgrade && f.bluetooth && !booked.bluetooth;
-
-  if (gainedAuto) tags.push({ text: t.automatic, gain: true });
-  if (isUpgrade && seats > 0) tags.push({ text: t.moreSeats(seats), gain: true });
-  if (isUpgrade && trunk > 0) tags.push({ text: t.moreTrunk(trunk), gain: true });
-  if (gainedBluetooth) tags.push({ text: t.bluetooth, gain: true });
-
-  if (!gainedAuto) tags.push({ text: f.transmission === 'automatic' ? t.automatic : t.manual, gain: false });
-  if (!(isUpgrade && seats > 0)) tags.push({ text: t.seats(f.passenger_capacity), gain: false });
-  if (!(isUpgrade && trunk > 0)) tags.push({ text: t.trunk(f.trunk_capacity_l), gain: false });
-  if (f.bluetooth && !gainedBluetooth) tags.push({ text: t.bluetooth, gain: false });
-  return tags;
+  const gained = (has: boolean, bookedHas: boolean) => (isUpgrade && has && !bookedHas ? t.newFeature : null);
+  return [
+    {
+      label: t.specTransmission,
+      value: f.transmission === 'automatic' ? t.automatic : t.manual,
+      gain: gained(f.transmission === 'automatic', booked.transmission === 'automatic'),
+    },
+    { label: t.specSeats, value: String(f.passenger_capacity), gain: isUpgrade && seats > 0 ? `+${seats}` : null },
+    { label: t.specTrunk, value: `${f.trunk_capacity_l} L`, gain: isUpgrade && trunk > 0 ? `+${trunk} L` : null },
+    { label: t.bluetooth, value: f.bluetooth ? t.yes : '—', gain: gained(f.bluetooth, booked.bluetooth) },
+    { label: t.specAirCon, value: f.air_conditioning ? t.yes : '—', gain: gained(f.air_conditioning, booked.air_conditioning) },
+  ];
 }
 
 export function VehicleStep({
@@ -159,6 +164,8 @@ function CarCard({
 }) {
   const isUpgrade = o.kind === 'upgrade';
   const v = o.vehicle;
+  const rows = specRows(o.category.features, shortlist.reserved_category.features, isUpgrade, t);
+  const gains = rows.filter((r) => r.gain).length;
   return (
     <div
       className={`car-card ${picked ? 'car-card--chosen' : ''} ${isUpgrade ? 'car-card--upgrade' : ''}`}
@@ -167,12 +174,7 @@ function CarCard({
       {o.kind === 'pre_assigned' && <div className="car-card__ribbon">{t.reservedForYou}</div>}
       {isUpgrade && <div className="car-card__ribbon car-card__ribbon--upgrade">★ {t.upgrade}</div>}
       {picked && <div className="car-card__check">✓</div>}
-      <div className="car-card__photo-wrap">
-        <div className="car-card__photo" style={v.main_photo_url ? { backgroundImage: `url(${v.main_photo_url})` } : undefined} />
-        <div className={`car-card__prep ${o.ready ? 'car-card__prep--ready' : 'car-card__prep--inprep'}`}>
-          {o.ready ? t.readyNow : t.beingPrepared}
-        </div>
-      </div>
+      <div className="car-card__photo" style={v.main_photo_url ? { backgroundImage: `url(${v.main_photo_url})` } : undefined} />
       <div className="car-card__body">
         <div className="car-card__model">
           {v.make} {v.model}
@@ -180,19 +182,18 @@ function CarCard({
         <div className="car-card__category">
           {o.category.name} · {v.year}
         </div>
-        <div className="car-card__tags">
-          {featureTags(o.category.features, shortlist.reserved_category.features, isUpgrade, t).map((tag) => (
-            <span key={tag.text} className={`car-card__tag ${tag.gain ? 'car-card__tag--gain' : ''}`}>
-              {tag.text}
-            </span>
+        <div className="car-card__specs">
+          {rows.map((row) => (
+            <div key={row.label} className={`car-card__spec ${row.gain ? 'car-card__spec--gain' : ''}`}>
+              <span className="car-card__spec-label">{row.label}</span>
+              <span className="car-card__spec-value">
+                {row.value}
+                {row.gain && <span className="car-card__spec-gain">▲ {row.gain}</span>}
+              </span>
+            </div>
           ))}
         </div>
-        <div className="car-card__match">
-          <div className="car-card__match-track">
-            <div className="car-card__match-fill" style={{ width: `${o.match_pct}%` }} />
-          </div>
-          <span>{t.match(o.match_pct)}</span>
-        </div>
+        {isUpgrade && gains > 0 && <div className="car-card__gain-note">{t.betterThanBooking(gains)}</div>}
         {isUpgrade ? (
           <div>
             <div className="car-card__price-big">

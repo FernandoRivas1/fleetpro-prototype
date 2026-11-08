@@ -63,6 +63,10 @@ export function StationPairingProvider({
 
   const wsRef = useRef<WebSocket | null>(null);
   const subscribersRef = useRef(new Set<(message: CheckoutMessage) => void>());
+  // The client's latest step_updated, handed to every new subscriber: the
+  // server replays it the moment the socket opens, usually before the
+  // screen that cares about it has mounted and subscribed.
+  const lastStepRef = useRef<CheckoutMessage | null>(null);
 
   const persistAndSetCredentials = (stationId: string, token: string) => {
     localStorage.setItem(storageKey(deviceRole), JSON.stringify({ stationId, token }));
@@ -152,6 +156,8 @@ export function StationPairingProvider({
         } catch {
           return;
         }
+        if (message.type === 'step_updated') lastStepRef.current = message;
+        else if (message.type === 'contract_started' || message.type === 'session_reset') lastStepRef.current = null;
         for (const handler of subscribersRef.current) handler(message);
       };
 
@@ -217,6 +223,7 @@ export function StationPairingProvider({
 
     subscribe: (handler) => {
       subscribersRef.current.add(handler);
+      if (lastStepRef.current) handler(lastStepRef.current);
       return () => subscribersRef.current.delete(handler);
     },
   };

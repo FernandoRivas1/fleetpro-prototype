@@ -44,6 +44,7 @@ export function DocumentsCard({
   onConfirmed,
   scannedData,
   scannedPhotos,
+  clientHere,
 }: {
   status: CheckoutStatusResponse;
   onConfirmed: () => void;
@@ -57,6 +58,8 @@ export function DocumentsCard({
    * plain placeholder — same "View" zoom pattern as the Pre Check-in
    * design's document thumbnails. */
   scannedPhotos: Record<string, string | null> | null;
+  /** The tablet is on the Documents or Data screen right now. */
+  clientHere: boolean;
 }) {
   const { driver } = status;
   // The combined business-rule gate (documents verified AND license not
@@ -178,6 +181,12 @@ export function DocumentsCard({
         <div className={`session-card__state ${readyForCheckout ? 'session-card__state--done' : expired ? 'session-card__state--alarm' : 'session-card__state--active'}`}>
           {readyForCheckout ? 'Verified' : expired ? 'Expiry alarm' : scannedData ? 'Scans received' : 'Awaiting client scans'}
         </div>
+        {clientHere && (
+          <div className="client-here-chip">
+            <span className="step-track__here-dot" />
+            Client is here
+          </div>
+        )}
       </div>
 
       <div className="session-card__body">
