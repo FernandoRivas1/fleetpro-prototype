@@ -36,8 +36,10 @@ def _new_station(client, branch_id: str) -> dict:
     return res.json()
 
 
-def _start_walk_in(client, email: str | None = None, first_name: str = "Test", last_name: str = "Driver") -> dict:
-    branch_id = _branch_id(client)
+def _start_walk_in(
+    client, email: str | None = None, first_name: str = "Test", last_name: str = "Driver", branch_code: str = "SCL-CTR"
+) -> dict:
+    branch_id = _branch_id(client, branch_code)
     station = _new_station(client, branch_id)
     res = client.post(
         f"{API}/checkout/start",
@@ -60,6 +62,43 @@ def _confirm_rental_details(client, contract: dict, category_code: str = "ECAR")
         },
     )
     assert res.status_code == 200, res.text
+
+
+def _start_reservation(client, email: str, branch_code: str) -> dict:
+    """Starts the check-out of `email`'s reservation at `branch_code` and
+    confirms its rental details exactly as booked."""
+    branch_id = _branch_id(client, branch_code)
+    reservations = client.get(f"{API}/checkout/reservations", params={"branch_id": branch_id}).json()
+    reservation = next(r for r in reservations if r["driver_email"] == email)
+    station = _new_station(client, branch_id)
+    res = client.post(
+        f"{API}/checkout/start", json={"station_id": station["station_id"], "reservation_id": reservation["id"]}
+    )
+    assert res.status_code == 201, res.text
+    contract = {**res.json(), "branch_id": branch_id, "reservation": reservation}
+
+    confirmed = client.post(
+        f"{API}/checkout/{contract['contract_id']}/rental-details",
+        json={
+            "pickup_branch_id": branch_id,
+            "return_branch_id": branch_id,
+            "pickup_date": reservation["pickup_date"],
+            "return_date": reservation["return_date"],
+            "acriss_category_id": reservation["acriss_category_id"],
+        },
+    )
+    assert confirmed.status_code == 200, confirmed.text
+    return contract
+
+
+def _vehicle_options(client, contract: dict) -> dict:
+    res = client.get(f"{API}/checkout/{contract['contract_id']}/vehicle-options")
+    assert res.status_code == 200, res.text
+    return res.json()
+
+
+def _select(client, contract: dict, vehicle_id: str):
+    return client.post(f"{API}/checkout/{contract['contract_id']}/select-vehicle", json={"vehicle_id": vehicle_id})
 
 
 def _best_vehicle_id(client, contract: dict, category_code: str = "ECAR") -> str:
@@ -262,27 +301,103 @@ def test_duplicate_national_id_is_a_409_not_a_crash(client):
     assert res.status_code == 409
 
 
-@pytest.mark.parametrize("category_code", ["ECAR", "CDAR", "ICAR"])
-def test_upsell_is_always_exactly_one_category_higher(client, category_code):
+# --- vehicle options: pre-assigned, same category, upgrades ------------------
+
+
+def test_vehicle_options_put_the_pre_assigned_car_first_then_the_category_then_upgrades(client):
+    contract = _start_reservation(client, "diego.fernandez@example.com", "SCL-APT")
+    options = _vehicle_options(client, contract)
+
+    assert options["reserved_category"]["code"] == "ECAR"
+    assert options["rental_days"] == 4  # picks up in 6 h, returns 4 days from now
+    kinds = [o["kind"] for o in options["options"]]
+    assert kinds[0] == "pre_assigned"
+    assert kinds == sorted(kinds, key=["pre_assigned", "same_category", "upgrade"].index)
+
+    pre_assigned = options["options"][0]
+    assert pre_assigned["vehicle"]["plate"] == "RJBC-12"
+    assert pre_assigned["extra_daily_rate"] == 0
+    assert kinds.count("same_category") >= 3
+    for option in options["options"]:
+        assert 60 <= option["match_pct"] <= 100
+        assert option["rank"] >= 1
+
+
+def test_upgrades_are_higher_categories_priced_against_the_booked_one(client):
     contract = _start_walk_in(client, STANDARD_EMAIL)
-    _confirm_rental_details(client, contract, category_code)
-    _select_vehicle(client, contract, category_code)
+    _confirm_rental_details(client, contract, "CDAR")
+    options = _vehicle_options(client, contract)
 
-    suggestion = client.get(f"{API}/checkout/{contract['contract_id']}/upsell-suggestion").json()
-    current = suggestion["current_category"]["hierarchy_order"]
-    assert suggestion["suggested_category"]["hierarchy_order"] == current + 1
-    if suggestion["has_suggestion"]:
-        assert suggestion["daily_price_difference"] > 0
+    booked = options["reserved_category"]
+    upgrades = [o for o in options["options"] if o["kind"] == "upgrade"]
+    assert {o["category"]["code"] for o in upgrades} == {"ICAR", "FVAR"}
+    for upgrade in upgrades:
+        assert upgrade["category"]["hierarchy_order"] > booked["hierarchy_order"]
+        assert upgrade["extra_daily_rate"] == upgrade["category"]["base_daily_rate"] - booked["base_daily_rate"] > 0
 
 
-def test_no_upsell_from_the_top_category(client):
+def test_no_upgrades_from_the_top_category(client):
     contract = _start_walk_in(client, STANDARD_EMAIL)
     _confirm_rental_details(client, contract, "FVAR")
-    _select_vehicle(client, contract, "FVAR")
+    kinds = {o["kind"] for o in _vehicle_options(client, contract)["options"]}
+    assert kinds == {"same_category"}
 
-    suggestion = client.get(f"{API}/checkout/{contract['contract_id']}/upsell-suggestion").json()
-    assert suggestion["has_suggestion"] is False
-    assert suggestion.get("suggested_category") is None
+
+def test_an_upgrade_can_be_chosen_but_never_a_lower_category(client):
+    contract = _start_walk_in(client, STANDARD_EMAIL)
+    _confirm_rental_details(client, contract, "CDAR")
+
+    lower = _select(client, contract, _best_vehicle_id(client, contract, "ECAR"))
+    assert lower.status_code == 422
+
+    upgrade = next(o for o in _vehicle_options(client, contract)["options"] if o["kind"] == "upgrade")
+    assert _select(client, contract, upgrade["vehicle"]["id"]).status_code == 200
+    status = client.get(f"{API}/checkout/{contract['contract_id']}/status").json()
+    assert status["current_category"]["code"] == upgrade["category"]["code"]
+    # The booked category stays the pricing baseline after the upgrade.
+    assert _vehicle_options(client, contract)["reserved_category"]["code"] == "CDAR"
+
+
+def test_a_pre_assigned_car_is_held_for_its_own_reservation(client):
+    held_plate = "RJBC-12"  # Diego's, see seed.py's PRE_ASSIGNED
+    walk_in = _start_walk_in(client, STANDARD_EMAIL, branch_code="SCL-APT")
+    _confirm_rental_details(client, walk_in, "ECAR")
+
+    plates = {o["vehicle"]["plate"]: o["vehicle"]["id"] for o in _vehicle_options(client, walk_in)["options"]}
+    assert held_plate not in plates
+
+    diego = _start_reservation(client, "diego.fernandez@example.com", "SCL-APT")
+    held_id = _vehicle_options(client, diego)["options"][0]["vehicle"]["id"]
+    assert _select(client, walk_in, held_id).status_code == 409
+    assert _select(client, diego, held_id).status_code == 200
+
+
+def test_a_car_being_prepared_can_be_chosen_and_stays_in_prep(client):
+    isidora = _start_reservation(client, "isidora.paredes@example.com", "SCL-APT")
+    pre_assigned = _vehicle_options(client, isidora)["options"][0]
+    assert pre_assigned["kind"] == "pre_assigned"
+    assert pre_assigned["ready"] is False
+
+    assert _select(client, isidora, pre_assigned["vehicle"]["id"]).status_code == 200
+    status = client.get(f"{API}/checkout/{isidora['contract_id']}/status").json()
+    assert status["vehicle"]["status"] == "InPrep"
+    # Still the client's current choice on screen, and still not anyone else's.
+    assert _vehicle_options(client, isidora)["selected_vehicle_id"] == pre_assigned["vehicle"]["id"]
+    walk_in = _start_walk_in(client, SILVER_EMAIL, branch_code="SCL-APT")
+    _confirm_rental_details(client, walk_in, "FVAR")
+    assert _select(client, walk_in, pre_assigned["vehicle"]["id"]).status_code == 409
+
+
+def test_changing_the_choice_releases_the_previous_car(client):
+    contract = _start_walk_in(client, STANDARD_EMAIL)
+    _confirm_rental_details(client, contract, "ECAR")
+    first, second = [o["vehicle"]["id"] for o in _vehicle_options(client, contract)["options"][:2]]
+    assert _select(client, contract, first).status_code == 200
+    assert _select(client, contract, second).status_code == 200
+
+    other = _start_walk_in(client, SILVER_EMAIL)
+    _confirm_rental_details(client, other, "ECAR")
+    assert _select(client, other, first).status_code == 200
 
 
 def test_prepaid_reservation_starts_at_rental_details_not_signature(client):

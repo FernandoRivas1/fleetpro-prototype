@@ -172,7 +172,7 @@ export function DocumentsCard({
     <div className="session-card">
       <div className="session-card__head">
         <div className={`session-card__badge ${readyForCheckout ? 'session-card__badge--done' : expired ? 'session-card__badge--alarm' : 'session-card__badge--active'}`}>
-          {readyForCheckout ? '✓' : '3'}
+          {readyForCheckout ? '✓' : '2'}
         </div>
         <div className="session-card__title">Documents</div>
         <div className={`session-card__state ${readyForCheckout ? 'session-card__state--done' : expired ? 'session-card__state--alarm' : 'session-card__state--active'}`}>

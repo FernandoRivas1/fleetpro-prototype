@@ -54,12 +54,22 @@ would have silently removed a legal safeguard. Because they live in the
 backend, the rules survived the redesign, and `tests/test_checkout_api.py`
 fails if any of them breaks.
 
-## 4. Upsell rule enforced by the data model
+## 4. Upselling is part of vehicle selection, not a separate step
 
-`ACRISSCategory.hierarchy_order` is unique, and the upsell query asks for
-exactly `current + 1`. A same-or-lower upsell can't be produced by any code
-path, rather than being prevented by an `if` that someone might later
-remove.
+**Decision.** One endpoint (`GET /checkout/{id}/vehicle-options`) returns a
+single ranked list: the reservation's pre-assigned car, the rest of the
+booked category, then the best two cars of each higher category with
+their extra daily rate. The agent shortlists from it, and the tablet shows
+upgrades side by side with the booked cars.
+
+**Why.** A separate "would you like to upgrade?" screen after the client
+has already chosen asks them to reconsider a decision they just made.
+Showing the upgrade next to the alternatives lets them compare like for
+like (seats, trunk, transmission, price per day and for the whole rental)
+at the moment they're choosing. The rule that an upgrade is never the same
+or a lower category is checked by `select-vehicle`, so no UI change can
+break it. Upgrades are priced against the booked category, even after the
+client switches to a different car.
 
 ## 5. AI reads documents; a person confirms them
 

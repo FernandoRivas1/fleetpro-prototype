@@ -25,8 +25,8 @@ can take about a minute while it wakes up.
 |---|---|
 | **Station pairing** | A tablet pairs with a counter **once per shift** (PIN or QR). Every new contract is pushed to it over the same WebSocket channel, so the agent never has to pair again for each customer. |
 | **7-step client wizard** | Rental details → Vehicle → Extras → Documents → Data → Deposit → Signature, in English or Spanish, built for touch. |
-| **Vehicle ranking** | Candidate cars are scored on transmission preference, mileage vs. the fleet average, headroom until next service, and damage. The score breakdown is shown to the agent. |
-| **Upselling** | Offers exactly one category up, and never the same or a lower one (enforced structurally, see below). |
+| **Vehicle selection** | One ranked list: the reservation's pre-assigned car (if any), the rest of the booked category, then upgrades with their extra daily rate. Cars are scored on transmission preference, mileage, service headroom and damage, and shown as a match percentage; cars still being prepared can be offered too. The agent shortlists up to four; the tablet presents them, upgrades included. |
+| **Upselling** | Built into vehicle selection. An upgrade can never be the same or a lower category than the one booked; the backend rejects it. |
 | **Document OCR** | ID and license photos are read by Claude (vision) into a proposal that the agent must verify before it counts. |
 | **Loyalty tiers** | Gold: deposit waived and free extras. Silver: half deposit. Corporate and Standard tiers too. Enforced in the backend, not just shown in the UI. |
 | **Pre check-in** | Customers can submit documents remotely; once the agent confirms them, the counter flow skips the Documents and Data steps. |
@@ -147,7 +147,7 @@ cd frontend && npm test
 The backend suite runs the full check-out over HTTP against a migrated,
 seeded Postgres: pairing, every tier, the expired-license and
 unverified-documents gates, duplicate national IDs, vehicle double-booking
-and upsell rules. It also has unit tests for the ranking and tier logic.
+pre-assigned cars, cars in preparation, and upgrade rules. It also has unit tests for the ranking and tier logic.
 CI runs everything, plus lint and a production build, on every pull request.
 
 ## How this was built

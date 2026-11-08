@@ -1,8 +1,17 @@
 """Vehicle candidate ranking for the executive's vehicle-selection screen.
 
-GET /api/v1/fleet/candidates scores every Available vehicle in a given
+GET /api/v1/fleet/candidates scores every offerable vehicle in a given
 ACRISS category + branch against one driver's preferences, so the
-executive can present ranked options instead of a plain list.
+executive can present ranked options instead of a plain list. The
+checkout's own vehicle-options endpoint (app/checkout/flow.py) ranks
+through rank_category() below too, once per category it shows.
+
+Offerable means Available (prepared, ready to hand over) or InPrep (being
+cleaned/fuelled, ready shortly) — the client sees which, so a nicer car
+that's a few minutes out is still on the table. A car pre-assigned to
+another open reservation (Reservation.assigned_vehicle_id), or already
+chosen in another unsigned checkout, is never offered to anyone else;
+see held_vehicle_ids.
 
 Scoring (see CLAUDE.md's ACRISSCategory.features and Vehicle fields):
   +30  category's transmission matches Driver.preferred_transmission
@@ -14,6 +23,15 @@ Scoring (see CLAUDE.md's ACRISSCategory.features and Vehicle fields):
        min-max normalized across the candidates (least headroom -> 0,
        most headroom -> 15)
    -5  per registered damage (damage_count)
+
+match_pct re-expresses the score as a "compatibility" figure for the UI,
+from MATCH_FLOOR_PCT to 100: every car offered already meets the booking
+(right category or better, right branch), so even the lowest-ranked one
+is a reasonable match, and the ranking spreads the cars above that floor.
+The spread is the score as a share of the most this driver *could* score
+(the transmission points only count toward that maximum when the driver
+has a preference at all), so a driver with no stated preference isn't
+marked down on every car for want of 30 points nobody could earn.
 
 Vehicle.color was never added (see CLAUDE.md's data model and seed.py), so
 the color-match criterion from the brief is dropped, as instructed.
@@ -31,11 +49,11 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel, ConfigDict
 from sqlalchemy.orm import Session
 
-from app.checkout.models import Driver
+from app.checkout.models import Driver, RentalContract, Reservation
 from app.database import get_db
 from app.fleet.models import ACRISSCategory, Vehicle
 from app.fleet.schemas import VehicleRead
-from app.shared.enums import VehicleStatus
+from app.shared.enums import ContractStatus, ReservationStatus, VehicleStatus
 from app.shared.models import Branch
 
 router = APIRouter(prefix="/api/v1/fleet", tags=["fleet"])
@@ -44,6 +62,13 @@ TRANSMISSION_MATCH_POINTS = 30.0
 MAX_MILEAGE_POINTS = 25.0
 MAX_SERVICE_HEADROOM_POINTS = 15.0
 DAMAGE_PENALTY_PER_UNIT = 5.0
+MATCH_FLOOR_PCT = 60
+
+# What can be offered to a client: prepared, or being prepared right now.
+OFFERABLE_STATUSES = (VehicleStatus.AVAILABLE, VehicleStatus.IN_PREP)
+# Reservations still waiting to be checked out — their pre-assigned cars
+# are held for them.
+OPEN_RESERVATION_STATUSES = (ReservationStatus.PENDING, ReservationStatus.CONFIRMED)
 
 
 class ScoreBreakdown(BaseModel):
@@ -59,6 +84,10 @@ class CandidateVehicle(BaseModel):
     vehicle: VehicleRead
     score: float
     score_breakdown: ScoreBreakdown
+    # MATCH_FLOOR_PCT-100, see the module docstring.
+    match_pct: int
+    # False only for InPrep: being prepared, ready shortly.
+    ready: bool
 
 
 class CandidatesResponse(BaseModel):
@@ -86,22 +115,61 @@ def get_candidates(
     if driver is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Driver not found")
 
-    vehicles = (
-        db.query(Vehicle)
-        .filter(
-            Vehicle.acriss_category_id == category_id,
-            Vehicle.branch_id == branch_id,
-            Vehicle.status == VehicleStatus.AVAILABLE,
-        )
-        .all()
-    )
-
     return CandidatesResponse(
         category_id=category_id,
         branch_id=branch_id,
         driver_id=driver_id,
-        candidates=_rank_vehicles(vehicles, category, driver),
+        candidates=rank_category(db, category, branch_id, driver),
     )
+
+
+def held_vehicle_ids(db: Session, except_reservation_id: uuid.UUID | None = None) -> set[uuid.UUID]:
+    """Cars off limits to everyone else: pre-assigned to an open
+    reservation other than `except_reservation_id`, or chosen in a
+    checkout that hasn't been signed yet. (An Available car chosen that
+    way is already marked Rented; this is what holds an InPrep one, which
+    keeps its InPrep status until the contract is signed so the client
+    still sees it's being prepared — see flow.py's select_vehicle.)"""
+    reserved = db.query(Reservation.assigned_vehicle_id).filter(
+        Reservation.assigned_vehicle_id.is_not(None),
+        Reservation.status.in_(OPEN_RESERVATION_STATUSES),
+    )
+    if except_reservation_id is not None:
+        reserved = reserved.filter(Reservation.id != except_reservation_id)
+    chosen = db.query(RentalContract.vehicle_id).filter(
+        RentalContract.vehicle_id.is_not(None),
+        RentalContract.status.in_((ContractStatus.NEW, ContractStatus.PRE_OPENED)),
+    )
+    return {vehicle_id for (vehicle_id,) in reserved} | {vehicle_id for (vehicle_id,) in chosen}
+
+
+def rank_category(
+    db: Session,
+    category: ACRISSCategory,
+    branch_id: uuid.UUID,
+    driver: Driver,
+    *,
+    for_reservation_id: uuid.UUID | None = None,
+    also_include_id: uuid.UUID | None = None,
+) -> list[CandidateVehicle]:
+    """Every offerable car of `category` at `branch_id`, best match first.
+
+    `for_reservation_id` lets that reservation's own pre-assigned car
+    through the hold filter. `also_include_id` keeps one car in the list
+    whatever its status — the checkout's already-selected vehicle, which
+    select-vehicle has marked Rented, so the client's current choice
+    doesn't vanish from the screen.
+    """
+    held = held_vehicle_ids(db, except_reservation_id=for_reservation_id)
+    vehicles = [
+        v
+        for v in db.query(Vehicle).filter(
+            Vehicle.acriss_category_id == category.id,
+            Vehicle.branch_id == branch_id,
+        )
+        if (v.status in OFFERABLE_STATUSES and v.id not in held) or v.id == also_include_id
+    ]
+    return _rank_vehicles(vehicles, category, driver)
 
 
 def _rank_vehicles(
@@ -110,6 +178,11 @@ def _rank_vehicles(
     transmission_score = _transmission_score(category, driver)
     mileage_scores = _mileage_scores(vehicles)
     headroom_scores = _service_headroom_scores(vehicles)
+    max_possible = (
+        (TRANSMISSION_MATCH_POINTS if driver.preferred_transmission is not None else 0.0)
+        + MAX_MILEAGE_POINTS
+        + MAX_SERVICE_HEADROOM_POINTS
+    )
 
     candidates = []
     for vehicle in vehicles:
@@ -122,12 +195,14 @@ def _rank_vehicles(
             service_headroom=round(headroom_scores[vehicle.id], 1),
             damage_penalty=round(damage_penalty, 1),
         )
-        total = transmission_score + mileage_scores[vehicle.id] + headroom_scores[vehicle.id] + damage_penalty
+        total = max(transmission_score + mileage_scores[vehicle.id] + headroom_scores[vehicle.id] + damage_penalty, 0.0)
         candidates.append(
             CandidateVehicle(
                 vehicle=VehicleRead.model_validate(vehicle),
-                score=round(max(total, 0.0), 1),
+                score=round(total, 1),
                 score_breakdown=breakdown,
+                match_pct=round(MATCH_FLOOR_PCT + (100 - MATCH_FLOOR_PCT) * total / max_possible),
+                ready=vehicle.status is not VehicleStatus.IN_PREP,
             )
         )
 

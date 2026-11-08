@@ -93,6 +93,13 @@ class Reservation(Base, TimestampMixin):
     acriss_category_id: Mapped[uuid.UUID] = mapped_column(
         ForeignKey("acriss_categories.id"), nullable=False
     )
+    # A specific car already set aside for this booking, if any (e.g. a
+    # reserved-model or loyalty booking). Shown first, pre-selected and
+    # marked "pre-assigned", in the executive's Candidate Vehicles list —
+    # but it's a suggestion, not a lock: the client can still be offered
+    # (and pick) other cars. While the reservation is open, no *other*
+    # checkout can take it (see fleet/ranking.py's held_vehicle_ids).
+    assigned_vehicle_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("vehicles.id"))
     deposit_done_online: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     status: Mapped[ReservationStatus] = mapped_column(
         pg_enum(ReservationStatus, "reservation_status"),

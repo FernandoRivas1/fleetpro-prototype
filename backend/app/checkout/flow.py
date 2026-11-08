@@ -4,14 +4,15 @@ Each state-changing endpoint here broadcasts the matching WebSocket
 message (app/checkout/ws.py) to the contract's station channel, mirroring
 how POST /api/v1/checkout/start already broadcasts contract_started — so
 both devices stay live-synced the same way for every step, not just the
-first one. The two read-only GETs (upsell-suggestion, deposit) don't
-broadcast anything; presenting an upsell or a deposit prompt to the
-customer is a decision the executive makes on the tablet itself, over the
-WebSocket channel directly (upsell_offered / upsell_responded), not a
-side effect of fetching data.
+first one. The two read-only GETs (vehicle-options, deposit) don't
+broadcast anything; which vehicles to show the customer is a decision the
+executive makes over the WebSocket channel directly (candidates_sent),
+not a side effect of fetching data.
 """
+import math
 import uuid
 from datetime import date, datetime, timezone
+from typing import Literal
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel, Field, model_validator
@@ -32,6 +33,7 @@ from app.checkout.schemas import ContractExtraRead, DepositRead
 from app.checkout.ws import CheckoutMessageType, manager
 from app.database import get_db
 from app.fleet.models import ACRISSCategory, Vehicle
+from app.fleet.ranking import OFFERABLE_STATUSES, ScoreBreakdown, held_vehicle_ids, rank_category
 from app.fleet.schemas import ACRISSCategoryRead, VehicleRead
 from app.shared.enums import (
     ContractOrigin,
@@ -355,23 +357,40 @@ async def select_vehicle(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Vehicle not found")
     if vehicle.branch_id != contract.branch_id:
         raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="Vehicle belongs to a different branch")
-    if vehicle.status is not VehicleStatus.AVAILABLE:
-        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Vehicle is not available")
 
-    # If a different vehicle was previously selected for this contract
-    # (e.g. an upsell offer was accepted, or the executive changed their
-    # mind before signing), release it back to the pool.
-    if contract.vehicle_id is not None and contract.vehicle_id != vehicle.id:
-        previous = db.get(Vehicle, contract.vehicle_id)
-        if previous is not None:
-            previous.status = VehicleStatus.AVAILABLE
+    # The upsell rule (CLAUDE.md): a car from a higher category is an
+    # upgrade, but never a lower one than the client booked.
+    reserved = _reserved_category(db, contract)
+    vehicle_category = db.get(ACRISSCategory, vehicle.acriss_category_id)
+    if reserved is not None and vehicle_category.hierarchy_order < reserved.hierarchy_order:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=f"A {vehicle_category.code} is a lower category than the {reserved.code} the client booked.",
+        )
+
+    if vehicle.id != contract.vehicle_id:  # re-confirming the current choice is a no-op
+        if vehicle.status not in OFFERABLE_STATUSES or vehicle.id in held_vehicle_ids(
+            db, except_reservation_id=contract.reservation_id
+        ):
+            raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Vehicle is not available")
+
+        # If a different vehicle was previously selected for this contract
+        # (the client changed their mind before signing), release it back
+        # to the pool — an in-prep one never left it, see below.
+        if contract.vehicle_id is not None:
+            previous = db.get(Vehicle, contract.vehicle_id)
+            if previous is not None and previous.status is VehicleStatus.RENTED:
+                previous.status = VehicleStatus.AVAILABLE
 
     contract.vehicle_id = vehicle.id
     contract.status = ContractStatus.PRE_OPENED
     # Taken out of the pool immediately, not just at handover — otherwise
     # a second contract at another counter could select the same vehicle
-    # before this one is signed.
-    vehicle.status = VehicleStatus.RENTED
+    # before this one is signed. A car still being prepared keeps its
+    # InPrep status (the client and the lot need to know) and is held by
+    # this contract instead — see fleet/ranking.py's held_vehicle_ids.
+    if vehicle.status is VehicleStatus.AVAILABLE:
+        vehicle.status = VehicleStatus.RENTED
 
     # Gold-tier perk (app/checkout/tiers.py): the deposit is waived, so
     # there's no in-person or online step to wait for — authorize it,
@@ -407,77 +426,133 @@ async def select_vehicle(
     return SelectVehicleResponse(contract_id=contract.id, vehicle_id=vehicle.id, status=contract.status)
 
 
-# --- upsell-suggestion (read-only) ----------------------------------------
+# --- vehicle-options (read-only) ----------------------------------------
+# The executive's single Candidate Vehicles list, upselling included:
+# the reservation's pre-assigned car (if any), then the rest of the booked
+# category, then the best cars of every higher category with their extra
+# daily rate. The executive shortlists from it and sends the shortlist to
+# the tablet (candidates_sent, over the WebSocket — no server state).
+
+UPGRADES_PER_CATEGORY = 2
 
 
-class UpsellSuggestionResponse(BaseModel):
-    has_suggestion: bool
-    reason: str | None = None
-    current_category: ACRISSCategoryRead | None = None
-    suggested_category: ACRISSCategoryRead | None = None
-    vehicle: VehicleRead | None = None
-    daily_price_difference: float | None = None
+class VehicleOption(BaseModel):
+    kind: Literal["pre_assigned", "same_category", "upgrade"]
+    vehicle: VehicleRead
+    category: ACRISSCategoryRead
+    # 1 = best match for this driver among the offerable cars of its own
+    # category (fleet/ranking.py).
+    rank: int
+    match_pct: int
+    score: float
+    score_breakdown: ScoreBreakdown
+    # False while the car is still being prepared (InPrep).
+    ready: bool
+    # On top of the booked category's base daily rate; 0 unless an upgrade.
+    extra_daily_rate: float
 
 
-@router.get("/{contract_id}/upsell-suggestion", response_model=UpsellSuggestionResponse)
-def get_upsell_suggestion(contract_id: uuid.UUID, db: Session = Depends(get_db)) -> UpsellSuggestionResponse:
+class VehicleOptionsResponse(BaseModel):
+    reserved_category: ACRISSCategoryRead
+    rental_days: int
+    selected_vehicle_id: uuid.UUID | None = None
+    # Display order: pre_assigned, same_category, then upgrades by category.
+    options: list[VehicleOption]
+
+
+@router.get("/{contract_id}/vehicle-options", response_model=VehicleOptionsResponse)
+def get_vehicle_options(contract_id: uuid.UUID, db: Session = Depends(get_db)) -> VehicleOptionsResponse:
     contract = db.get(RentalContract, contract_id)
     if contract is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Contract not found")
-
-    current_category = _current_category(db, contract)
-    if current_category is None:
-        return UpsellSuggestionResponse(
-            has_suggestion=False,
-            reason="No vehicle or reservation category to base an upsell on yet.",
+    reserved = _reserved_category(db, contract)
+    if reserved is None or not contract.rental_details_confirmed:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Confirm rental details (branch, dates, category) before choosing a vehicle.",
         )
+    driver = db.get(Driver, contract.driver_id)
+    reservation = db.get(Reservation, contract.reservation_id) if contract.reservation_id else None
+    assigned_id = reservation.assigned_vehicle_id if reservation is not None else None
 
-    # hierarchy_order is unique (see fleet/models.py), so this is either
-    # exactly one category or none — never an equal-or-lower category,
-    # satisfying the "upsell can never be same-or-lower" rule structurally.
-    next_category = (
+    pre_assigned: list[VehicleOption] = []
+    same_category: list[VehicleOption] = []
+    upgrades: list[VehicleOption] = []
+    categories = (
         db.query(ACRISSCategory)
-        .filter(ACRISSCategory.hierarchy_order == current_category.hierarchy_order + 1)
-        .one_or_none()
+        .filter(ACRISSCategory.hierarchy_order >= reserved.hierarchy_order)
+        .order_by(ACRISSCategory.hierarchy_order)
+        .all()
     )
-    if next_category is None:
-        return UpsellSuggestionResponse(
-            has_suggestion=False,
-            reason=f"{current_category.name} is already the highest category — no upsell available.",
-            current_category=ACRISSCategoryRead.model_validate(current_category),
+    for category in categories:
+        is_upgrade = category.id != reserved.id
+        ranked = rank_category(
+            db,
+            category,
+            contract.branch_id,
+            driver,
+            for_reservation_id=contract.reservation_id,
+            also_include_id=contract.vehicle_id,
         )
+        upgrades_shown = 0
+        for rank, candidate in enumerate(ranked, start=1):
+            vehicle_id = candidate.vehicle.id
+            if vehicle_id == assigned_id:
+                bucket, kind = pre_assigned, "pre_assigned"
+            elif not is_upgrade:
+                bucket, kind = same_category, "same_category"
+            elif upgrades_shown < UPGRADES_PER_CATEGORY or vehicle_id == contract.vehicle_id:
+                bucket, kind = upgrades, "upgrade"
+                upgrades_shown += 1
+            else:
+                continue
+            bucket.append(
+                VehicleOption(
+                    kind=kind,
+                    vehicle=candidate.vehicle,
+                    category=ACRISSCategoryRead.model_validate(category),
+                    rank=rank,
+                    match_pct=candidate.match_pct,
+                    score=candidate.score,
+                    score_breakdown=candidate.score_breakdown,
+                    ready=candidate.ready,
+                    extra_daily_rate=float(category.base_daily_rate) - float(reserved.base_daily_rate),
+                )
+            )
 
-    # Lowest mileage in the next category, at the contract's branch, as the
-    # one vehicle to offer.
-    vehicle = (
-        db.query(Vehicle)
-        .filter(
-            Vehicle.acriss_category_id == next_category.id,
-            Vehicle.branch_id == contract.branch_id,
-            Vehicle.status == VehicleStatus.AVAILABLE,
-        )
-        .order_by(Vehicle.current_km.asc())
-        .first()
+    return VehicleOptionsResponse(
+        reserved_category=ACRISSCategoryRead.model_validate(reserved),
+        rental_days=_rental_days(db, contract),
+        selected_vehicle_id=contract.vehicle_id,
+        options=pre_assigned + same_category + upgrades,
     )
-    if vehicle is None:
-        return UpsellSuggestionResponse(
-            has_suggestion=False,
-            reason=f"No available {next_category.code} vehicle at this branch right now.",
-            current_category=ACRISSCategoryRead.model_validate(current_category),
-            suggested_category=ACRISSCategoryRead.model_validate(next_category),
-        )
 
-    return UpsellSuggestionResponse(
-        has_suggestion=True,
-        current_category=ACRISSCategoryRead.model_validate(current_category),
-        suggested_category=ACRISSCategoryRead.model_validate(next_category),
-        vehicle=VehicleRead.model_validate(vehicle),
-        daily_price_difference=float(next_category.base_daily_rate) - float(current_category.base_daily_rate),
-    )
+
+def _reserved_category(db: Session, contract: RentalContract) -> ACRISSCategory | None:
+    """The category the client booked (the reservation's, or a walk-in's
+    Rental Details choice) — the baseline an upgrade is priced against,
+    whatever car ends up selected."""
+    if contract.reservation_id is not None:
+        reservation = db.get(Reservation, contract.reservation_id)
+        if reservation is not None:
+            return db.get(ACRISSCategory, reservation.acriss_category_id)
+    if contract.acriss_category_id is not None:
+        return db.get(ACRISSCategory, contract.acriss_category_id)
+    return None
+
+
+def _rental_days(db: Session, contract: RentalContract) -> int:
+    """Billable days, any started day counting as a full one."""
+    reservation = db.get(Reservation, contract.reservation_id) if contract.reservation_id else None
+    pickup = reservation.pickup_date if reservation is not None else contract.pickup_date
+    return_date = reservation.return_date if reservation is not None else contract.return_date
+    if pickup is None or return_date is None:
+        return 1
+    return max(1, math.ceil((return_date - pickup).total_seconds() / 86_400))
 
 
 def _current_category(db: Session, contract: RentalContract) -> ACRISSCategory | None:
-    """The category to browse/upsell *from*: the already-selected
+    """The category currently in play: the already-selected
     vehicle's category if there is one, else the originating
     reservation's, else — a walk-in's own — whatever was set on the
     Rental Details step (contract.acriss_category_id; see
@@ -731,6 +806,11 @@ async def sign_contract(
     now = datetime.now(timezone.utc)
     contract.status = ContractStatus.OPEN
     contract.opened_at = now
+    # Signed: an in-prep car (held only by this contract until now, see
+    # select_vehicle) is now rented like any other.
+    vehicle = db.get(Vehicle, contract.vehicle_id)
+    if vehicle is not None:
+        vehicle.status = VehicleStatus.RENTED
 
     db.commit()
     db.refresh(contract)

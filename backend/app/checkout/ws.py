@@ -38,8 +38,6 @@ class CheckoutMessageType(str, enum.Enum):
     DRIVER_DATA_CONFIRMED = "driver_data_confirmed"
     CANDIDATES_SENT = "candidates_sent"
     VEHICLE_SELECTED = "vehicle_selected"
-    UPSELL_OFFERED = "upsell_offered"
-    UPSELL_RESPONDED = "upsell_responded"
     EXTRAS_CONFIRMED = "extras_confirmed"
     DEPOSIT_AUTHORIZED = "deposit_authorized"
     CONTRACT_SIGNED = "contract_signed"

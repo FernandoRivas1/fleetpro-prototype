@@ -150,6 +150,8 @@ export interface ReservationRead {
   return_date: string;
   pickup_branch_id: string;
   acriss_category_id: string;
+  /** A car already set aside for this booking, if any — see models.py. */
+  assigned_vehicle_id: string | null;
   deposit_done_online: boolean;
   status: 'pending' | 'confirmed' | 'cancelled' | 'completed' | 'no_show';
   /** null if no Driver row exists yet for this email — see schemas.py. */
@@ -379,6 +381,10 @@ export interface CandidateVehicle {
   vehicle: VehicleRead;
   score: number;
   score_breakdown: ScoreBreakdown;
+  /** 60-100 compatibility with this driver — see fleet/ranking.py. */
+  match_pct: number;
+  /** False while the car is still being prepared (InPrep). */
+  ready: boolean;
 }
 
 export interface CandidatesResponse {
@@ -548,17 +554,44 @@ export function confirmDocuments(contractId: string, body: ConfirmDocumentsReque
   });
 }
 
-export interface UpsellSuggestionResponse {
-  has_suggestion: boolean;
-  reason: string | null;
-  current_category: ACRISSCategoryRead | null;
-  suggested_category: ACRISSCategoryRead | null;
-  vehicle: VehicleRead | null;
-  daily_price_difference: number | null;
+// --- vehicle-options (app/checkout/flow.py) ---------------------------------
+
+export type VehicleOptionKind = 'pre_assigned' | 'same_category' | 'upgrade';
+
+export interface VehicleOption {
+  kind: VehicleOptionKind;
+  vehicle: VehicleRead;
+  category: ACRISSCategoryRead;
+  /** 1 = best match among the offerable cars of its own category. */
+  rank: number;
+  match_pct: number;
+  score: number;
+  score_breakdown: ScoreBreakdown;
+  /** False while the car is still being prepared (InPrep). */
+  ready: boolean;
+  /** On top of the booked category's daily rate; 0 unless an upgrade. */
+  extra_daily_rate: number;
 }
 
-export function getUpsellSuggestion(contractId: string): Promise<UpsellSuggestionResponse> {
-  return apiFetch(`/api/v1/checkout/${contractId}/upsell-suggestion`);
+export interface VehicleOptionsResponse {
+  reserved_category: ACRISSCategoryRead;
+  rental_days: number;
+  selected_vehicle_id: string | null;
+  /** Display order: pre-assigned, same category, then upgrades. */
+  options: VehicleOption[];
+}
+
+export function getVehicleOptions(contractId: string): Promise<VehicleOptionsResponse> {
+  return apiFetch(`/api/v1/checkout/${contractId}/vehicle-options`);
+}
+
+/** The candidates_sent WebSocket payload: the executive's shortlist, in
+ * display order, plus what the tablet needs to price the upgrades. */
+export interface VehicleShortlist {
+  contract_id: string;
+  reserved_category: ACRISSCategoryRead;
+  rental_days: number;
+  options: VehicleOption[];
 }
 
 // --- Extras catalog (app/shared/extras.py) ----------------------------------

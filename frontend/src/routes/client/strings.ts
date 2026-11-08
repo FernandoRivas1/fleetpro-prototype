@@ -6,8 +6,7 @@ export type Lang = 'en' | 'es';
 
 // Order per the Tablet *.dc.html designs: Rental details -> Vehicle ->
 // Extras -> Documents -> Data -> Deposit -> Signature. Upselling has no
-// entry of its own — it's a sub-screen inside the Vehicle step, same as
-// before the reorder.
+// entry of its own — upgrades are offered inside the Vehicle step.
 export const STEP_LABELS: Record<Lang, string[]> = {
   en: ['Rental details', 'Vehicle', 'Extras', 'Documents', 'Data', 'Deposit', 'Signature'],
   es: ['Arriendo', 'Vehículo', 'Extras', 'Documentos', 'Datos', 'Garantía', 'Firma'],
@@ -216,47 +215,60 @@ export const dataStrings = {
 
 export const vehicleStrings = {
   en: {
-    title: 'These vehicles are available in your category',
+    title: 'Choose your vehicle',
+    subtitle: (category: string, days: number) =>
+      `Your booking: ${category} · ${days} ${days === 1 ? 'day' : 'days'}`,
+    reservedForYou: 'Reserved for you',
+    upgrade: 'Upgrade',
+    readyNow: 'Ready now',
+    beingPrepared: 'Being prepared',
+    match: (pct: number) => `${pct}% match for you`,
+    included: 'Included in your booking',
+    perDay: '/day',
+    forTheRental: (amount: string, days: number) => `${amount} for ${days} ${days === 1 ? 'day' : 'days'}`,
+    automatic: 'Automatic',
+    manual: 'Manual',
+    seats: (n: number) => `${n} seats`,
+    moreSeats: (n: number) => `+${n} seats`,
+    trunk: (l: number) => `${l} L trunk`,
+    moreTrunk: (l: number) => `+${l} L trunk`,
+    bluetooth: 'Bluetooth',
     back: 'Back',
     continue: 'Continue',
     chosen: 'Chosen ✓',
     choose: 'Choose this one',
+    chooseUpgrade: 'Upgrade to this one',
     youChose: (model: string, plate: string) => `You chose the ${model} · ${plate}`,
     tapToChoose: 'Tap a vehicle to choose it',
     waiting: 'Waiting for the executive to send vehicle options…',
   },
   es: {
-    title: 'Estos vehículos están disponibles en su categoría',
+    title: 'Elija su vehículo',
+    subtitle: (category: string, days: number) =>
+      `Su reserva: ${category} · ${days} ${days === 1 ? 'día' : 'días'}`,
+    reservedForYou: 'Reservado para usted',
+    upgrade: 'Mejora',
+    readyNow: 'Listo ahora',
+    beingPrepared: 'En preparación',
+    match: (pct: number) => `${pct}% de compatibilidad`,
+    included: 'Incluido en su reserva',
+    perDay: '/día',
+    forTheRental: (amount: string, days: number) => `${amount} por ${days} ${days === 1 ? 'día' : 'días'}`,
+    automatic: 'Automático',
+    manual: 'Manual',
+    seats: (n: number) => `${n} asientos`,
+    moreSeats: (n: number) => `+${n} asientos`,
+    trunk: (l: number) => `Maletero ${l} L`,
+    moreTrunk: (l: number) => `+${l} L de maletero`,
+    bluetooth: 'Bluetooth',
     back: 'Atrás',
     continue: 'Continuar',
     chosen: 'Elegido ✓',
     choose: 'Elegir este',
+    chooseUpgrade: 'Mejorar a este',
     youChose: (model: string, plate: string) => `Eligió el ${model} · ${plate}`,
     tapToChoose: 'Toque un vehículo para elegirlo',
     waiting: 'Esperando a que el ejecutivo envíe las opciones de vehículo…',
-  },
-};
-
-export const upsellStrings = {
-  en: {
-    yourVehicle: 'Your vehicle',
-    upgradeTitle: 'Upgrade your experience',
-    forJust: 'For just',
-    morePerDay: 'more per day',
-    keeping: 'Keeping my vehicle ✓',
-    keep: 'Keep my vehicle',
-    upgraded: 'Upgrade confirmed ✓',
-    upgrade: 'Upgrade my vehicle',
-  },
-  es: {
-    yourVehicle: 'Su vehículo',
-    upgradeTitle: 'Mejore su experiencia',
-    forJust: 'Por solo',
-    morePerDay: 'más por día',
-    keeping: 'Mantengo mi vehículo ✓',
-    keep: 'Mantener mi vehículo',
-    upgraded: 'Mejora confirmada ✓',
-    upgrade: 'Mejorar mi vehículo',
   },
 };
 

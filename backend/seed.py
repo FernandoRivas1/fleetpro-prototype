@@ -6,12 +6,13 @@ Run `alembic upgrade head` first so the tables exist.
 
 Seeds, per the Rental Software prototype spec (plus later additions, noted below):
   - 4 ACRISS categories with a hierarchy and features (ECAR < CDAR < ICAR < FVAR)
-  - 55 vehicles: at least three Available cars of every category at every
+  - 61 vehicles: at least three Available cars of every category at every
     branch (five at the airport), with deliberately varied mileage /
     next-service / damage data so the ranking is visibly meaningful, plus
-    a few Rented / InPrep / Inactive cars so the fleet view's status
-    colors (CLAUDE.md) all have something to render. Photos are the
-    illustrations in frontend/public/vehicles/.
+    Rented / InPrep / Inactive cars so the fleet view's status colors
+    (CLAUDE.md) all have something to render — and so the client's
+    vehicle options mix "ready now" with "being prepared" cars. Photos are
+    the illustrations in frontend/public/vehicles/.
   - 7 drivers covering every loyalty tier (app/checkout/tiers.py): a Gold
     driver with valid, verified documents; a Corporate driver with an
     EXPIRED license (tier is never a shortcut past that gate — CLAUDE.md)
@@ -21,7 +22,9 @@ Seeds, per the Rental Software prototype spec (plus later additions, noted below
     (see WALK_IN_* and EXTRA_ARRIVALS below — only referenced by
     name/email in reservations)
   - 13 reservations (one with deposit_done_online=True), four or five per
-    branch, with pickups from now through the next few days
+    branch, with pickups from now through the next few days; four arrive
+    with a pre-assigned vehicle (see PRE_ASSIGNED), one of them still
+    being prepared
   - 3 reservation pre-check-ins (app/checkout/precheckin.py), one per
     non-terminal PrecheckinStatus (requested / loaded / confirmed), so the
     executive's Pre Check-in queue has something at every stage
@@ -241,7 +244,27 @@ UNAVAILABLE_CARS = [
     ("SCL-CTR", "FVAR", VehicleStatus.IN_PREP),
     ("SCL-CTR", "ECAR", VehicleStatus.INACTIVE),
     ("SCL-NUN", "ICAR", VehicleStatus.RENTED),
+    # Being cleaned/fuelled right now: still offered to clients, marked as
+    # "being prepared" (see fleet/ranking.py's OFFERABLE_STATUSES).
+    ("SCL-APT", "ECAR", VehicleStatus.IN_PREP),
+    ("SCL-APT", "CDAR", VehicleStatus.IN_PREP),
+    ("SCL-APT", "ICAR", VehicleStatus.IN_PREP),
+    ("SCL-CTR", "ICAR", VehicleStatus.IN_PREP),
+    ("SCL-NUN", "CDAR", VehicleStatus.IN_PREP),
+    ("SCL-NUN", "FVAR", VehicleStatus.IN_PREP),
 ]
+
+# Reservations that arrive with a specific car already set aside
+# (Reservation.assigned_vehicle_id), by driver email (+ category, since
+# Maria has two bookings) -> plate. Not always the best-ranked car in its
+# category, as in real life, so the executive has a reason to offer
+# alternatives; Isidora's is still being prepared.
+PRE_ASSIGNED = {
+    ("diego.fernandez@example.com", "ECAR"): "RJBC-12",
+    ("isidora.paredes@example.com", "FVAR"): "RJTW-16",
+    ("maria.gonzalez@example.com", "ICAR"): "HZGK-11",
+    ("maria.gonzalez@example.com", "FVAR"): "LPTW-14",
+}
 
 # Chilean plates are four consonants and two digits (e.g. "RJKL-11").
 PLATE_PREFIXES = {"SCL-APT": "RJ", "SCL-CTR": "HZ", "SCL-NUN": "LP"}
@@ -446,7 +469,11 @@ def seed_drivers(db) -> dict[str, Driver]:
 
 
 def seed_reservations(
-    db, categories: dict[str, ACRISSCategory], branches: dict[str, Branch], drivers: dict[str, Driver]
+    db,
+    categories: dict[str, ACRISSCategory],
+    branches: dict[str, Branch],
+    drivers: dict[str, Driver],
+    vehicles: dict[str, Vehicle],
 ) -> None:
     now = datetime.now(timezone.utc)
     maria = drivers["maria.gonzalez@example.com"]
@@ -575,6 +602,11 @@ def seed_reservations(
         )
         for first_name, last_name, email, branch_code, category_code, pickup_in_hours, rental_days in EXTRA_ARRIVALS
     ]
+    code_by_category_id = {c.id: code for code, c in categories.items()}
+    for reservation in reservations:
+        plate = PRE_ASSIGNED.get((reservation.driver_email, code_by_category_id[reservation.acriss_category_id]))
+        if plate is not None:
+            reservation.assigned_vehicle_id = vehicles[plate].id
     db.add_all(reservations)
     db.flush()
 
@@ -682,7 +714,7 @@ def run() -> None:
         categories = seed_categories(db)
         vehicles = seed_vehicles(db, categories, branches)
         drivers = seed_drivers(db)
-        seed_reservations(db, categories, branches, drivers)
+        seed_reservations(db, categories, branches, drivers, vehicles)
         seed_pre_handover_reports(db, vehicles)
         seed_extras(db)
 
@@ -692,7 +724,7 @@ def run() -> None:
         print(f"  acriss_categories: {len(categories)}")
         print(f"  vehicles: {len(vehicles)}")
         print(f"  drivers: {len(drivers)} (+ 5 unregistered walk-in personas)")
-        print(f"  reservations: {db.query(Reservation).count()}")
+        print(f"  reservations: {db.query(Reservation).count()} ({len(PRE_ASSIGNED)} with a pre-assigned vehicle)")
         print("  reservation_precheckins: 3 (requested / loaded / confirmed)")
         print("  pre_handover_reports: 2")
         print("  extras: 5")

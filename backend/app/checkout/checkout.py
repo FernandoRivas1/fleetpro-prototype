@@ -7,7 +7,7 @@ involved, the tablet is already listening.
 
 GET /api/v1/checkout/{contract_id}/status lets either device "catch up"
 after a reload. Per-step WebSocket messages (step_updated, candidates_sent,
-upsell_offered, ...) are deliberately NOT persisted (see ws.py's
+documents_scanned, ...) are deliberately NOT persisted (see ws.py's
 docstring), so `current_step` here is *inferred* from what IS persisted —
 the contract, driver, and whatever's been attached to the contract so far.
 It's a coarse, best-effort reconstruction, not a replay of every message

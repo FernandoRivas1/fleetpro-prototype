@@ -4,7 +4,6 @@ import { getCheckoutStatus, type CheckoutStatusResponse } from '../../lib/api';
 import type { CheckoutMessageType } from '../../pairing/types';
 import { DocumentsCard } from './DocumentsCard';
 import { VehiclesCard } from './VehiclesCard';
-import { UpsellCard } from './UpsellCard';
 import { TierBadge } from './TierBadge';
 
 // Order per the Tablet *.dc.html designs: Rental details -> Vehicle ->
@@ -34,7 +33,6 @@ const RESYNC_ON: CheckoutMessageType[] = [
   'documents_confirmed_by_executive',
   'driver_data_confirmed',
   'vehicle_selected',
-  'upsell_responded',
   'extras_confirmed',
   'deposit_authorized',
   'contract_signed',
@@ -52,7 +50,6 @@ const RESYNC_ON: CheckoutMessageType[] = [
 const CLIENT_STEP_INDEX: Record<string, number> = {
   rentalDetails: 0,
   vehicle: 1,
-  upsell: 1,
   extras: 2,
   documents: 3,
   data: 4,
@@ -73,13 +70,10 @@ export function ActiveSessionPanel({
   const [error, setError] = useState<string | null>(null);
   // candidates_sent has no durable server-side state (see the stage-2 plan:
   // it's a pure WS push, and a sender never gets its own broadcast echoed
-  // back) — tracked here, lifted above both cards, and lost on reload same
-  // as the tablet's own in-memory shortlist would be.
+  // back) — tracked here, lifted above VehiclesCard so the reset-session
+  // modal can report it, and lost on reload same as the tablet's own
+  // in-memory shortlist would be. Upgrades travel in the same shortlist.
   const [candidatesSent, setCandidatesSent] = useState(false);
-  // Same idea as candidatesSent — offering an upsell is a pure WS push
-  // with no durable server-side state, so it's tracked here too (lifted
-  // above UpsellCard) purely so the reset-session modal can report it.
-  const [upsellOffered, setUpsellOffered] = useState(false);
   // documents_scanned carries the client's fresh OCR read — nothing
   // persists it until confirm-documents runs (see flow.py's docstring), so
   // this is the only place the executive sees it before typing it in.
@@ -134,8 +128,8 @@ export function ActiveSessionPanel({
   // idle (session_reset, see ws.py) and returns the executive to search/
   // walk-in. Deliberately does NOT try to undo anything already persisted
   // server-side — a verified driver stays verified, the contract row
-  // stays as-is — only the two purely-local, WS-only flags below (sent
-  // shortlist, sent upsell) are actually lost, which is exactly what the
+  // stays as-is — only the purely-local, WS-only shortlist (upgrades
+  // included) is actually lost, which is exactly what the
   // confirmation modal tells the executive before they commit to it.
   const confirmReset = () => {
     if (resetting) return;
@@ -209,20 +203,18 @@ export function ActiveSessionPanel({
         </div>
       </div>
 
-      {/* Reordered to match the client's own new order (Tablet Rental
-          Details design): Vehicle -> Upsell -> ... -> Documents. Extras,
-          Data, and Signature stay pure client self-service with no
-          executive card, same as Data always was — only Deposit and
-          Signature get a "built in a later stage" placeholder, matching
-          the set that had one before this reorder too. */}
+      {/* Matches the client's own order (Tablet Rental Details design):
+          Vehicle (upselling included, in the same list) -> ... ->
+          Documents. Extras, Data, and Signature stay pure client
+          self-service with no executive card — only Deposit and
+          Signature get a "built in a later stage" placeholder. */}
       <div className="session-body">
         <VehiclesCard status={status} onSent={() => setCandidatesSent(true)} />
-        <UpsellCard status={status} locked={!candidatesSent} onOffered={() => setUpsellOffered(true)} />
         <DocumentsCard status={status} onConfirmed={refresh} scannedData={scannedData} scannedPhotos={scannedPhotos} />
 
         {['Deposit', 'Signature'].map((label, i) => (
           <div className="session-card session-card--future" key={label}>
-            <div className="session-card__badge">{i + 4}</div>
+            <div className="session-card__badge">{i + 3}</div>
             <div className="session-card__title" style={{ color: '#a9b4bd' }}>
               {label}
             </div>
@@ -246,18 +238,10 @@ export function ActiveSessionPanel({
             <div className="reset-loses">
               <div className="reset-loses__row">
                 <div className="reset-loses__dot" />
-                <div>Vehicle shortlist sent to the tablet</div>
+                <div>Vehicle and upgrade options sent to the tablet</div>
                 <div style={{ flex: 1 }} />
                 <div className={`mono ${candidatesSent ? 'reset-loses__value--lost' : ''}`}>
                   {candidatesSent ? 'discarded' : 'nothing yet'}
-                </div>
-              </div>
-              <div className="reset-loses__row">
-                <div className="reset-loses__dot" />
-                <div>Upgrade offer sent to the tablet</div>
-                <div style={{ flex: 1 }} />
-                <div className={`mono ${upsellOffered ? 'reset-loses__value--lost' : ''}`}>
-                  {upsellOffered ? 'discarded' : 'nothing yet'}
                 </div>
               </div>
             </div>
